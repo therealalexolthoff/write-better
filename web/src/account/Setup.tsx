@@ -12,6 +12,7 @@ import {
   startAuthenticatorSetup,
   type AuthenticatorSetup,
 } from "../firebase";
+import QrCode from "../QrCode";
 import { PATHS, navigate } from "../router";
 
 export default function Setup({ email, emailVerified }: { email: string | null; emailVerified: boolean }) {
@@ -108,12 +109,16 @@ export function AuthenticatorStep({ initial = null }: { initial?: Pick<Authentic
         <form onSubmit={finish} className="stack">
           <ol className="numbered">
             <li>
-              In the app, add an account and choose <strong>Enter a setup key</strong> (sometimes "Enter key manually").
-            </li>
-            <li>
-              Type this key:
-              <code className="setup-key">{setup.key.replace(/(.{4})/g, "$1 ").trim()}</code>
-              <span className="hint">On this phone? <a href={setup.url}>Open it in your authenticator app</a> instead.</span>
+              In the app, add an account and scan this code:
+              <QrCode text={setup.url} label="QR code to add Write Better to your authenticator app" />
+              <details className="key-fallback">
+                <summary>Can't scan it?</summary>
+                <p>
+                  Choose <strong>Enter a setup key</strong> (sometimes "Enter key manually") in the app, and type this key:
+                </p>
+                <code className="setup-key">{setup.key.replace(/(.{4})/g, "$1 ").trim()}</code>
+                <span className="hint">On this phone? <a href={setup.url}>Open it in your authenticator app</a> instead.</span>
+              </details>
             </li>
             <li>
               <label>

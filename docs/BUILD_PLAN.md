@@ -150,7 +150,7 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 
 **Done when:** a teacher can go from sign-up to signed in without anyone using the Google Cloud console.
 
-**Status (2026-11-09):** built and tested with fakes for Identity Platform: the sign-up, waiting, setup and admin screens, `api/app/signup.py`, `api/app/admin.py`, `infra/create_admin.py` and the sign-up alert. To check live once deployed: [VERIFY] that clearing a lost authenticator works (`identity.clear_authenticator`), how email enumeration protection affects sign-up, and the whole sign-up-to-signed-in path. The authenticator setup shows a key to type in (and a link that opens the app on a phone), not a QR code: drawing a QR code needs a small library, so ask before adding one.
+**Status (2026-11-09):** built and tested with fakes for Identity Platform: the sign-up, waiting, setup and admin screens, `api/app/signup.py`, `api/app/admin.py`, `infra/create_admin.py` and the sign-up alert. To check live once deployed: [VERIFY] that clearing a lost authenticator works (`identity.clear_authenticator`), how email enumeration protection affects sign-up, and the whole sign-up-to-signed-in path. The authenticator setup shows a QR code (`qrcode-generator`, added with the owner's approval on 2026-11-09), with the setup key and a phone link as a fallback.
 
 ### Phase 5: Classes, students and the student error view
 

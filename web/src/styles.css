@@ -401,6 +401,9 @@ mark.span { background: var(--mark); border-bottom: 2px solid var(--mark-line); 
   background: var(--bg); border: 1px dashed var(--line-strong); font-size: 1.15rem; letter-spacing: 0.08em;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; word-break: normal; overflow-wrap: anywhere;
 }
+.qr-code { display: block; margin: 0.75rem 0; border: 1px solid var(--line); border-radius: var(--radius-small); max-width: 100%; height: auto; }
+.key-fallback { margin-top: 0.5rem; }
+.key-fallback summary { cursor: pointer; color: var(--link); font-weight: 600; min-height: 2.75rem; display: flex; align-items: center; }
 .empty { text-align: center; padding: 2.5rem 1rem; background: var(--card); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
 .empty h2 { margin-bottom: 0.4rem; }
 .link-box { border-left: 5px solid var(--accent); }
