@@ -75,25 +75,15 @@ button.link { border: none; background: none; color: var(--accent); padding: 0.2
 .badge.released, .badge.revision_open, .badge.revision_reviewed { color: var(--right); font-weight: 600; }
 
 /* Exercise items */
-.items { padding-left: 1.5rem; }
 .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
 .item.right { border-left: 6px solid var(--right); }
 .item.wrong { border-left: 6px solid var(--wrong); }
 .instruction { color: var(--muted); margin-top: 0; }
-.sentence { font-size: 1.15rem; line-height: 2.4; }
-.blank { display: inline-block; width: 8rem; margin: 0 0.25rem; vertical-align: baseline; }
 .save-status { font-size: 0.9rem; color: var(--muted); }
 .save-status.offline, .save-status.failed { color: var(--wrong); font-weight: 600; }
 fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 1rem 1rem; margin: 0; }
 .check { font-weight: normal; display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
 .check input { width: 1.4rem; min-height: 1.4rem; margin: 0; }
-
-/* Tap-to-place reorder (FR-14) */
-.placed, .pool { display: flex; flex-wrap: wrap; gap: 0.5rem; min-height: 3.5rem; padding: 0.5rem; border-radius: 8px; }
-.placed { border: 2px dashed var(--line); margin-bottom: 0.75rem; }
-.chip { min-height: 3rem; padding: 0.5rem 0.9rem; font-size: 1.05rem; }
-.placed-chip { background: #e8f0fe; border-color: var(--accent); }
-.hint { color: var(--muted); align-self: center; }
 
 .confirm { background: var(--warn-bg); border-radius: 10px; padding: 1rem; }
 .verdict { font-weight: 700; margin-top: 0; }
@@ -110,7 +100,7 @@ tr.clickable:hover { background: #eef3fb; }
 td.actions { text-align: right; white-space: nowrap; }
 td.actions button + button { margin-left: 0.5rem; }
 
-/* Short answers: partial marks, error spans with codes (FR-21) */
+/* Results: partial outcomes, error spans with codes (FR-21) */
 .item.partial { border-left: 6px solid #b26a00; }
 .item.partial .verdict { color: #8a5200; }
 .spanned { line-height: 2.2; white-space: pre-wrap; }
@@ -158,8 +148,3 @@ ul.plain li + li { margin-top: 0.25rem; }
 .stage { font-size: 0.85rem; color: var(--muted); }
 .stage.yours { color: var(--accent); font-weight: 600; }
 
-/* Lessons (FR-28) */
-.lesson-text { white-space: pre-wrap; }
-.wrong-example { color: var(--wrong); margin: 0; }
-.right-example { color: var(--right); font-weight: 600; margin: 0.25rem 0; }
-h2.section { margin-top: 1.5rem; }

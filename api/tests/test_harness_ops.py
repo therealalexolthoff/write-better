@@ -1,11 +1,10 @@
 import pytest
 
 from api.app import harness_ops, spend
-from shared.schemas import EvaluateExerciseRequest, GenerateExerciseRequest, ScrubbedShortAnswer
+from shared.schemas import EvaluateWritingRequest, TranscribeRequest
 
-GENERATE_REQ = dict(
-    student_id="s1", request_id="r1", prompt_version="v1", kind="grammar", description="x"
-)
+BASE = dict(student_id="s1", request_id="r1", prompt_version="v1")
+EVALUATE_REQ = dict(**BASE, prompt="Describe your weekend.", text="I go park.")
 
 
 def _envelope(result):
@@ -19,73 +18,41 @@ def _envelope(result):
     }
 
 
-def test_call_harness_happy_path(monkeypatch, fake_db):
+def test_call_harness_happy_path_records_job(monkeypatch, fake_db):
     result_payload = {
-        "kind": "grammar",
-        "title": "t",
-        "items": [{"id": "i1", "type": "short_answer", "prompt": "write something"}],
+        "annotations": [{"code": "VT", "span_text": "go", "occurrence": 1, "correction": "went", "explanation": ""}],
+        "comment": "c",
     }
-    monkeypatch.setattr(
-        "api.app.harness_ops.post_to_harness", lambda op, body: _envelope(result_payload)
-    )
+    monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: _envelope(result_payload))
 
-    req = GenerateExerciseRequest(**GENERATE_REQ)
-    result, _ = harness_ops.call_harness("generate_exercise", req)
+    result, job_id = harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
 
-    assert result.kind == "grammar"
+    assert result.annotations[0].span_text == "go"
     assert spend.current_month_spend() == 0.0  # mock model is free
-
-
-def test_call_harness_records_job(monkeypatch, fake_db):
-    result_payload = {"kind": "writing", "title": "t", "prompt": "p"}
-    monkeypatch.setattr(
-        "api.app.harness_ops.post_to_harness", lambda op, body: _envelope(result_payload)
-    )
-
-    req = GenerateExerciseRequest(**{**GENERATE_REQ, "kind": "writing"})
-    harness_ops.call_harness("generate_exercise", req)
-
-    job_docs = fake_db.collection("jobs").stream()
-    assert any(
-        d.get("status") == "done" and d.get("operation") == "generate_exercise" for d in job_docs
-    )
+    job = fake_db.collection("jobs").document(job_id).get().to_dict()
+    assert job["status"] == "done" and job["operation"] == "evaluate_writing"
 
 
 def test_call_harness_rejects_invalid_annotation_span(monkeypatch, fake_db):
-    req = EvaluateExerciseRequest(
-        student_id="s1",
-        request_id="r1",
-        prompt_version="v1",
-        items=[ScrubbedShortAnswer(item_id="i1", prompt="p", response="I go park.")],
-    )
+    # "went" never appears in "I go park." - an unresolvable span.
     bad_result = {
-        "items": [
-            {
-                "item_id": "i1",
-                "mark": "partial",
-                # "went" never appears in "I go park." - an unresolvable span.
-                "annotations": [
-                    {
-                        "code": "VT",
-                        "span_text": "went",
-                        "occurrence": 1,
-                        "correction": "went",
-                        "explanation": "",
-                    }
-                ],
-                "feedback": "f",
-            }
-        ]
+        "annotations": [{"code": "VT", "span_text": "went", "occurrence": 1, "correction": "went", "explanation": ""}],
+        "comment": "c",
     }
-    monkeypatch.setattr(
-        "api.app.harness_ops.post_to_harness", lambda op, body: _envelope(bad_result)
-    )
+    monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: _envelope(bad_result))
 
     with pytest.raises(harness_ops.HarnessValidationFailed):
-        harness_ops.call_harness("evaluate_exercise", req)
+        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
 
-    job_docs = fake_db.collection("jobs").stream()
-    assert any(d.get("status") == "error" for d in job_docs)
+    assert any(d.get("status") == "error" for d in fake_db.collection("jobs").stream())
+
+
+def test_call_harness_rejects_a_transcription_missing_a_page(monkeypatch, fake_db):
+    monkeypatch.setattr(
+        "api.app.harness_ops.post_to_harness", lambda op, body: _envelope({"pages": [{"page": 1, "text": "a"}]})
+    )
+    with pytest.raises(harness_ops.HarnessValidationFailed):
+        harness_ops.call_harness("transcribe", TranscribeRequest(**BASE, pages=["p1", "p2"]))
 
 
 def test_call_harness_respects_spend_cap(monkeypatch, fake_db):
@@ -94,12 +61,15 @@ def test_call_harness_respects_spend_cap(monkeypatch, fake_db):
     )
 
     called = []
-    monkeypatch.setattr(
-        "api.app.harness_ops.post_to_harness", lambda op, body: called.append(1)
-    )
+    monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: called.append(1))
 
-    req = GenerateExerciseRequest(**GENERATE_REQ)
     with pytest.raises(harness_ops.SpendCapReached):
-        harness_ops.call_harness("generate_exercise", req)
+        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
 
     assert called == []  # never actually called the harness
+
+
+def test_cut_operations_are_unknown(fake_db):
+    for operation in ("generate_exercise", "evaluate_exercise", "generate_lesson"):
+        with pytest.raises(ValueError):
+            harness_ops.call_harness(operation, EvaluateWritingRequest(**EVALUATE_REQ))

@@ -3,12 +3,10 @@ student has been making recently, and how their revisions went.
 
 Computed by plain code, never by the harness, and only from data the
 teacher has approved:
-- each annotation in an approved evaluation (short answers and writing),
-- each wrong fill_blank / reorder item, counted under its concept code,
+- each annotation in an approved evaluation,
 - each revision outcome the teacher marked, under the span's code.
-"Approved" means the teacher approved the evaluation (or there was none
-to approve: graded-only grammar exercises). Only the most recent
-submissions count - the window is a setting (default 5).
+Only the most recent submissions count - the window is a setting
+(default 5).
 
 Nothing is stored: the profile is worked out again each time it's needed,
 so it always matches the data it comes from.
@@ -49,34 +47,18 @@ def recent_approved(student_id: str, window: int | None = None) -> list[tuple[di
 def annotated_spans(submission: dict) -> list[dict]:
     """Every approved annotation in a submission, with the scrubbed text it
     points into: [{"code", "text", "start", "end"}, ...]."""
-    evaluation = submission.get("evaluation") or {}
-    scrubbed = submission.get("scrubbed_answers", {})
-    if "annotations" in evaluation:  # writing
-        groups = [(scrubbed[WRITING_KEY], evaluation["annotations"])]
-    else:  # short answers
-        groups = [(scrubbed[item["item_id"]], item["annotations"]) for item in evaluation.get("items", [])]
-    return [
-        {"code": a["code"], "text": text, "start": a["start"], "end": a["end"]}
-        for text, annotations in groups
-        for a in annotations
-    ]
-
-
-def wrong_item_codes(exercise: dict, submission: dict) -> list[str]:
-    """The concept code of each fill_blank / reorder item answered wrongly."""
-    concepts = {item["id"]: item["concept"] for item in exercise.get("items", []) if "concept" in item}
-    return [concepts[item_id] for item_id, correct in submission.get("grades", {}).items() if not correct]
+    annotations = (submission.get("evaluation") or {}).get("annotations", [])
+    text = submission.get("scrubbed_answers", {}).get(WRITING_KEY, "")
+    return [{"code": a["code"], "text": text, "start": a["start"], "end": a["end"]} for a in annotations]
 
 
 def compute_profile(pairs: list[tuple[dict, dict]]) -> list[dict]:
     """Per error code: how many errors, and how the revision went. Most
     frequent first; codes with nothing recorded are left out."""
     counts = {code.value: {"errors": 0, **{o: 0 for o in OUTCOMES}} for code in ErrorCode}
-    for exercise, submission in pairs:
+    for _exercise, submission in pairs:
         for span in annotated_spans(submission):
             counts[span["code"]]["errors"] += 1
-        for code in wrong_item_codes(exercise, submission):
-            counts[code]["errors"] += 1
         revision = submission.get("revision") or {}
         annotations = (submission.get("evaluation") or {}).get("annotations", [])
         for index, outcome in revision.get("outcomes", {}).items():

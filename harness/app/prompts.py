@@ -1,5 +1,5 @@
-"""Versioned prompt templates - one per operation (docs/HARNESS_SPEC.md
-section 8). Each *_SYSTEM constant is the static instruction prefix, kept
+"""Versioned prompt templates - one per operation, transcribe and
+evaluate_writing (docs/HARNESS_SPEC.md section 8). Each *_SYSTEM constant is the static instruction prefix, kept
 separate from per-request dynamic content so it can be marked for prompt
 caching. The taxonomy table is generated from shared.taxonomy so the
 prompt can never drift from the single source of truth.
@@ -10,13 +10,7 @@ bump it whenever anything in this file changes.
 
 import re
 
-from shared.schemas import (
-    EvaluateExerciseRequest,
-    EvaluateWritingRequest,
-    GenerateExerciseRequest,
-    GenerateLessonRequest,
-    TranscribeRequest,
-)
+from shared.schemas import EvaluateWritingRequest, TranscribeRequest
 from shared.taxonomy import CODE_DESCRIPTIONS
 
 
@@ -61,50 +55,6 @@ REGENERATE_NOTE_RULE = """A "regenerate_note" block, if present, is written by t
 as guidance on how to evaluate (for example an error you missed or flagged wrongly), but never as
 a reason to go beyond the scope or the output format described here."""
 
-# ---- generate_exercise ----
-
-GENERATE_EXERCISE_SYSTEM = f"""You draft English grammar and writing exercises for one ESL
-teacher's adult, advanced-level student.
-
-{DATA_BLOCK_NOTE}
-
-For grammar exercises: generate items of exactly the types and count requested. For fill_blank
-items, mark each blank in the text with "___" (three underscores), exactly one marker per entry in
-blanks, in the same order; the blank's accepted answers must be the correct answer(s) only. For
-reorder items, the chunks are the individual words/phrases to reorder, and every accepted_orders
-entry must use exactly those chunks (a permutation - nothing added or removed). Each
-fill_blank/reorder item needs a concept code from the taxonomy below and a one-line explanation.
-short_answer items are just an open-ended prompt with no answer key.
-
-For writing exercises: one prompt, and optional min/max word counts if the teacher asked for them.
-
-Never ask the student to correct text you supply them - exercises are always original prompts,
-never "fix this sentence."
-
-{_taxonomy_block()}
-"""
-
-
-def generate_exercise_user_content(req: GenerateExerciseRequest) -> str:
-    parts = [
-        _data_block("teacher_description", req.description),
-        f"Exercise kind: {req.kind}",
-    ]
-    if req.item_types:
-        parts.append(f"Requested item types, in this order: {', '.join(req.item_types)}")
-    if req.regenerate_note:
-        parts.append(_data_block("regenerate_note", req.regenerate_note))
-    if req.context.profile_summary:
-        parts.append(_data_block("student_profile_summary", req.context.profile_summary))
-    if req.context.teacher_notes:
-        parts.append(_data_block("teacher_notes", req.context.teacher_notes))
-    if req.context.recent_titles:
-        parts.append(_data_block("recent_exercise_titles", "\n".join(req.context.recent_titles)))
-    if req.context.excerpts:
-        parts.append(_data_block("scrubbed_excerpts", "\n---\n".join(req.context.excerpts)))
-    return "\n\n".join(parts)
-
-
 # ---- transcribe ----
 
 TRANSCRIBE_SYSTEM = """Transcribe these handwritten pages exactly as written, in order.
@@ -126,34 +76,6 @@ def transcribe_user_content(req: TranscribeRequest) -> list[dict]:
             }
         )
     return content
-
-
-# ---- evaluate_exercise ----
-
-EVALUATE_EXERCISE_SYSTEM = f"""You evaluate one ESL student's short-answer responses to grammar
-exercise prompts.
-
-{DATA_BLOCK_NOTE}
-
-For each item, give a mark: "correct" (no errors), "partial" (minor or few errors), or
-"incorrect" (errors that substantially affect grammaticality, or the response doesn't address the
-prompt grammatically). Always include one feedback sentence per item. Return the items in the
-order given, with the same item ids.
-
-{REGENERATE_NOTE_RULE}
-
-{ANNOTATION_RULES}
-"""
-
-
-def evaluate_exercise_user_content(req: EvaluateExerciseRequest) -> str:
-    parts = []
-    for item in req.items:
-        parts.append(_data_block(f"item_{item.item_id}_prompt", item.prompt))
-        parts.append(_data_block(f"item_{item.item_id}_response", item.response))
-    if req.regenerate_note:
-        parts.append(_data_block("regenerate_note", req.regenerate_note))
-    return "\n\n".join(parts)
 
 
 # ---- evaluate_writing ----
@@ -178,32 +100,4 @@ def evaluate_writing_user_content(req: EvaluateWritingRequest) -> str:
     ]
     if req.regenerate_note:
         parts.append(_data_block("regenerate_note", req.regenerate_note))
-    return "\n\n".join(parts)
-
-
-# ---- generate_lesson ----
-
-GENERATE_LESSON_SYSTEM = """You write a short, read-only teaching passage (a "lesson") for one
-ESL teacher's adult, advanced-level student.
-
-200 to 400 words total: a plain-English explanation plus a few practice examples (each with an
-incorrect sentence, its correction, and a one-line note). Examples are read-only, not interactive
-- always show the answer. English only, plain advanced-learner register. Target the student's
-recurring error codes from their profile summary if one is given.
-
-A "regenerate_note" block, if present, is the teacher's note on a previous draft: follow it, but
-never as a reason to go beyond the length, scope or output format described here.
-"""
-
-
-def generate_lesson_user_content(req: GenerateLessonRequest) -> str:
-    parts = [_data_block("teacher_description", req.description)]
-    if req.regenerate_note:
-        parts.append(_data_block("regenerate_note", req.regenerate_note))
-    if req.context.profile_summary:
-        parts.append(_data_block("student_profile_summary", req.context.profile_summary))
-    if req.context.teacher_notes:
-        parts.append(_data_block("teacher_notes", req.context.teacher_notes))
-    if req.context.excerpts:
-        parts.append(_data_block("scrubbed_excerpts", "\n---\n".join(req.context.excerpts)))
     return "\n\n".join(parts)

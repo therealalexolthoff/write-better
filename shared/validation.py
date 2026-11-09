@@ -13,13 +13,6 @@ class SpanError(ValueError):
     pass
 
 
-def check_item_ids(result_ids: list[str], request_ids: list[str]) -> None:
-    """An evaluation must cover exactly the items sent, in the same order -
-    otherwise spans would be checked against the wrong answer's text."""
-    if result_ids != request_ids:
-        raise ValueError(f"evaluated items {result_ids} don't match the items sent {request_ids}")
-
-
 def check_page_numbers(result_pages: list[int], pages_sent: int) -> None:
     """A transcription must have exactly one entry per photo sent, numbered
     1, 2, 3, ... in order - otherwise text could be missing or misplaced."""

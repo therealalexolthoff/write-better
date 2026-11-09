@@ -71,8 +71,8 @@ export default function StudentsPanel({ students, onChange }: { students: Studen
       {deleting && (
         <div className="confirm stack">
           <p>
-            <strong>Delete {deleting.username} for good?</strong> This deletes their account, all their exercises,
-            answers, photos, lessons and your notes. It can't be undone. Copies in the daily backups expire within 7
+            <strong>Delete {deleting.username} for good?</strong> This deletes their account, all their writing,
+            photos and your notes. It can't be undone. Copies in the daily backups expire within 7
             days.
           </p>
           <label>

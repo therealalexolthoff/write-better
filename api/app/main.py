@@ -14,19 +14,17 @@ from shared.logs import catch_unexpected_errors
 from .config import settings
 from .exercises import router as exercises_router
 from .harness_client import call_harness_health
-from .lessons import router as lessons_router
 from .overview import router as overview_router
 from .review import router as review_router
 from .students import router as students_router
 from .writing import router as writing_router
 
-app = FastAPI(title="ESL Tool API")
+app = FastAPI(title="Write Better API")
 catch_unexpected_errors(app)  # no tracebacks in the logs: they can quote student text
 app.include_router(students_router)
 app.include_router(exercises_router)
 app.include_router(review_router)
 app.include_router(writing_router)
-app.include_router(lessons_router)
 app.include_router(overview_router)
 
 

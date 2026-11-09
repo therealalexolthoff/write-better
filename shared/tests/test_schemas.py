@@ -1,83 +1,31 @@
 import pytest
 from pydantic import ValidationError
 
-from shared.schemas import (
-    FillBlankItem,
-    Blank,
-    ReorderItem,
-    GrammarExerciseDraft,
-    ShortAnswerItem,
-)
+from shared.schemas import Annotation, EvaluateWritingResult, WritingExerciseDraft
 
 
-def test_reorder_item_accepts_valid_permutation():
-    item = ReorderItem(
-        id="i1",
-        chunks=["always", "I", "eat", "breakfast"],
-        accepted_orders=[["I", "always", "eat", "breakfast"]],
-        concept="WO",
-        explanation="word order",
-    )
-    assert item.type == "reorder"
+def test_writing_draft_word_limits_are_optional():
+    draft = WritingExerciseDraft(title="t", prompt="p")
+    assert (draft.kind, draft.min_words, draft.max_words) == ("writing", None, None)
 
 
-def test_reorder_item_rejects_non_permutation():
+def test_writing_draft_rejects_min_above_max():
     with pytest.raises(ValidationError):
-        ReorderItem(
-            id="i1",
-            chunks=["always", "I", "eat", "breakfast"],
-            accepted_orders=[["I", "always", "eat", "lunch"]],  # "lunch" not in chunks
-            concept="WO",
-            explanation="word order",
-        )
+        WritingExerciseDraft(title="t", prompt="p", min_words=200, max_words=100)
 
 
-def test_reorder_item_rejects_unknown_concept_code():
+def test_writing_draft_rejects_another_kind_and_extra_fields():
     with pytest.raises(ValidationError):
-        ReorderItem(
-            id="i1",
-            chunks=["a", "b"],
-            accepted_orders=[["a", "b"]],
-            concept="NOT_A_CODE",
-            explanation="x",
-        )
-
-
-def test_grammar_draft_rejects_duplicate_item_ids():
-    item1 = ShortAnswerItem(id="i1", prompt="Write about your weekend.")
-    item2 = FillBlankItem(
-        id="i1",  # duplicate
-        text="She ___ to school.",
-        blanks=[Blank(id="b1", accepted=["went"])],
-        concept="VT",
-        explanation="past tense",
-    )
+        WritingExerciseDraft(kind="grammar", title="t", prompt="p")
     with pytest.raises(ValidationError):
-        GrammarExerciseDraft(title="Test", items=[item1, item2])
+        WritingExerciseDraft(title="t", prompt="p", items=[])
 
 
-def test_grammar_draft_requires_at_least_one_item():
+def test_annotation_rejects_unknown_code():
     with pytest.raises(ValidationError):
-        GrammarExerciseDraft(title="Test", items=[])
+        Annotation(code="ZZ", span_text="x", occurrence=1, correction="y", explanation="z")
 
 
-def test_fill_blank_marker_count_must_match_blanks():
+def test_evaluation_needs_a_comment():
     with pytest.raises(ValidationError):
-        FillBlankItem(
-            id="i1",
-            text="She ___ to school and ___ home.",  # two markers
-            blanks=[Blank(id="b1", accepted=["went"])],  # one blank
-            concept="VT",
-            explanation="x",
-        )
-
-
-def test_fill_blank_accepts_longer_markers():
-    item = FillBlankItem(
-        id="i1",
-        text="She ______ to school.",
-        blanks=[Blank(id="b1", accepted=["went"])],
-        concept="VT",
-        explanation="x",
-    )
-    assert item.type == "fill_blank"
+        EvaluateWritingResult(annotations=[])

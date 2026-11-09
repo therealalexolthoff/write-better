@@ -1,24 +1,22 @@
-# Requirements (v1, single-teacher app)
+# Requirements (v1)
 
-> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+> **Status:** updated in Phase 1 (2026-11-09): Write Better reviews writing only. Grammar exercises, short answers, AI-generated exercises and lessons are cut; their requirement numbers are kept, marked "Removed", because the code refers to requirements by number. Accounts and access (4.1) still describe one teacher until Phase 2. Where this and `docs/BUILD_PLAN.md` disagree, the build plan wins.
 
-Status: planning complete, ready for build. Items marked **[VERIFY]** must be confirmed by the coding agent before relying on them.
+Items marked **[VERIFY]** must be confirmed by the coding agent before relying on them.
 
 ## 1. Purpose and context
-A web app for one ESL teacher and their class (8 students now, must work for 30+). Non-commercial. The teacher generates personalized grammar/punctuation and writing exercises with an AI "harness" (Claude), students complete them on phones, the teacher reviews and releases AI-drafted feedback, and the app builds a per-student learner profile that personalizes future work and short teaching lessons.
+A free web app that helps adult language learners write better English. The teacher writes a writing exercise and assigns it; students write on their phones or on paper; an AI "harness" (Claude) drafts feedback on grammar, punctuation, spelling and capitalization; the teacher reviews, edits and releases it; and the app keeps a per-student learner profile of approved errors.
 
 Users:
 - **Teacher**: exactly one, ever. Laptop-first UI.
 - **Students**: adults, advanced level, English-only UI, phone-first UI. Identified only by an agreed pseudonym ("American name"), never real names.
 
 ## 2. Scope of v1
-In scope: grammar and punctuation errors, including spelling and capitalization. Out of scope for v1: cohesion, structure, style, word choice, scores of any kind, groups/shared content, notifications, retakes, multiple teachers, native/PWA apps, multiple languages, student password change, self-signup.
+In scope: grammar and punctuation errors in students' writing, including spelling and capitalization. Out of scope for v1: grammar exercises, AI-written exercises or lessons, cohesion, structure, style, word choice, scores of any kind, notifications, retakes, native/PWA apps, multiple languages, student password change. (Multiple teachers, classes and a public sign-up come in later phases: see the build plan.)
 
 ## 3. Glossary
 - **Harness**: separate backend service that calls Claude via Vertex AI. Has no database access.
-- **Grammar exercise**: scored per item; items of type `fill_blank`, `reorder`, `short_answer`, mixable in one exercise.
-- **Writing exercise**: one prompt, free-form response, evaluated with coded annotations, never marked or scored.
-- **Writing lesson**: read-only teaching passage personalized to a student. Not an exercise.
+- **Writing exercise**: one prompt written by the teacher, a free-form response, evaluated with coded annotations, never marked or scored.
 - **Scrubbed text**: a teacher-edited copy of student text with personal data removed. The only student text ever sent to the harness (exception: handwriting photos for transcription).
 - **Annotation**: a coded error span (see the 14-code taxonomy in HARNESS_SPEC.md).
 
@@ -31,53 +29,49 @@ In scope: grammar and punctuation errors, including spelling and capitalization.
 - FR-4. The teacher can deactivate a student, and delete a student with all their data (including photos). Deletion requires typing the username to confirm and explains that backups expire within 7 days.
 - FR-5. Overrides, reopens, deletions, and password resets are recorded in an audit log. **Extended (teacher decision):** student account creation and deactivation are audit-logged too, for the same reason - they're account-lifecycle actions in the same risk category.
 
-### 4.2 Exercise generation (teacher)
-- FR-6. Teacher picks a student and an exercise kind (grammar or writing), describes the exercise in free text, and presses Generate.
-- FR-7. The app sends the harness the description plus an assembled context bundle (learner profile summary, teacher notes, recent exercise titles/concepts), keyed only by the opaque student ID.
-- FR-8. The harness returns a structured draft (schemas in HARNESS_SPEC.md). Validation failures are never shown to the teacher.
-- FR-9. Teacher can edit any item directly, regenerate with an optional note, or approve and assign. Drafts are editable; assigned exercises are frozen.
-- FR-10. Every exercise is assigned to exactly one student. No due dates. The teacher tells students in class; the student sees an "assigned to me" list.
-- FR-11. Fill-in-blank and reorder items are generated with accepted-answer lists, a one-line explanation, and a concept code. The teacher checks answers and concept codes at approval time (an explicit checklist on the approval screen).
-- FR-12. Writing exercises: one prompt, optional min/max word counts, set by the teacher. Typed response is always available to the student; the teacher may additionally upload photos of handwritten work (see 4.5). **Teacher decision (2026-10-08):** word limits are advisory - the student sees a live word count and a gentle reminder when outside the limits, but can still submit. **Teacher decision (2026-10-14):** the teacher can also write a writing exercise themselves (title, prompt, optional word limits; no AI draft) and assign it at once to students picked from a list. Each picked student gets their own copy (so FR-10 still holds), which then follows the normal flow. Prompts are never changed after assigning. Writing only; grammar exercises are still generated per student.
+### 4.2 Writing exercises (teacher)
+- FR-6 and FR-7. Removed: the AI no longer generates exercises.
+- FR-8. Every AI result is validated against its schema (HARNESS_SPEC.md); invalid output is never shown to the teacher.
+- FR-9. Removed: there are no drafts to edit or regenerate.
+- FR-10. Every exercise copy belongs to exactly one student. No due dates. The teacher tells students in class; the student sees an "assigned to me" list.
+- FR-11. Removed (grammar answer keys).
+- FR-12. The teacher writes each writing exercise: title, prompt, optional min/max word counts. The AI never writes exercises. The teacher assigns it at once to students picked from a list; each gets their own copy (so FR-10 holds), which then follows the normal flow. Prompts are never changed after assigning. A typed response is always available to the student; photos of handwritten work can be added too (see 4.5). Word limits are advisory: the student sees a live word count and a gentle reminder when outside the limits, but can still submit.
 
 ### 4.3 Doing an exercise (student, phone-first)
 - FR-13. Student sees assigned work and opens it. Answers autosave (debounced) and resume after app switching or signal loss.
-- FR-14. Reorder items use tap-to-place, not drag-and-drop. Large tap targets, plain-English instructions.
+- FR-14. Large tap targets and plain-English instructions. (Tap-to-place word ordering was removed with grammar exercises.)
 - FR-15. Student presses Submit with a confirmation step. After submitting, no edits. No retakes. Only the teacher can reopen a submission (audit-logged), returning it to in-progress.
 
 ### 4.4 Grading, scrubbing, evaluation, release
-- FR-16. On submit, `fill_blank` and `reorder` items are graded deterministically against accepted answers. Comparison is strict on characters (case and punctuation count) after trimming and collapsing repeated whitespace. Students see nothing until release.
-- FR-17. Grammar exercises with no `short_answer` items skip scrubbing and the harness and go straight to ready-to-release.
-- FR-18. Otherwise, the teacher opens a laptop review screen showing the original text and an editable scrubbed copy. The original is never modified or sent anywhere. Editing the scrubbed text after evaluation invalidates the draft evaluation and requires re-running it.
-- FR-19. "Send for evaluation" sends only the scrubbed text. The harness returns, grammar short answers: a mark (`correct`, `partial`, `incorrect`), annotations, one feedback sentence per item; writing exercises: annotations and one overall comment.
-- FR-20. Teacher can accept, edit, or override every mark, annotation (add, remove, recode), and feedback text, and can regenerate with an optional note. All output is a draft until released.
-- FR-21. Teacher releases results. Student view after release:
-  - Grammar exercises: per-item correct/incorrect (short answers: correct/partial/incorrect), the correct answer shown for wrong fill/reorder items, the explanation/feedback sentence, and codes on annotated spans for short answers. No numeric score or percentage.
-  - Writing exercises: their text with coded spans highlighted (code only; corrections and explanations stay teacher-only), plus the overall comment.
-- FR-22. Students see their history of released work and lessons.
+- FR-16. Students see nothing until release. (Automatic grading of grammar items was removed.)
+- FR-17. Removed.
+- FR-18. After submit, the teacher opens a laptop review screen showing the original text and an editable scrubbed copy. The original is never modified or sent anywhere. Editing the scrubbed text after evaluation invalidates the draft evaluation and requires re-running it.
+- FR-19. "Send for evaluation" sends only the scrubbed text and the prompt. The harness returns annotations and one overall comment.
+- FR-20. Teacher can accept or edit every annotation (add, remove, recode) and the comment, and can regenerate with an optional note. All output is a draft until released.
+- FR-21. Teacher releases results. The student sees their text with coded spans highlighted (code only; corrections and explanations stay teacher-only), plus the overall comment. No numeric score or percentage.
+- FR-22. Students see their history of released work.
 
 ### 4.5 Handwritten writing responses
-- FR-23. For a writing exercise, the teacher can upload multiple photos in page order for a student. Uploads are for writing exercises only. EXIF/metadata is stripped. **Teacher decisions (2026-10-08):** photos can be uploaded any time before evaluation, whether or not the student typed anything; starting transcription locks the student's typed answer as if submitted. The teacher's browser re-draws each photo as a JPEG (at most 2000 px on the long side; this drops metadata and fixes rotation), and the API strips any remaining metadata segments again before storing - no image library needed. **Teacher decisions (2026-10-14):** the student can also take or choose photos of their own pages on an open writing exercise (same JPEG re-draw and metadata stripping). They see only their own pages, and only until they submit; they can remove their pages and start again. Submitting locks the photos with the typed answer. The teacher still starts transcription.
+- FR-23. The teacher can upload multiple photos in page order for a student's exercise. EXIF/metadata is stripped. **Teacher decisions (2026-10-08):** photos can be uploaded any time before evaluation, whether or not the student typed anything; starting transcription locks the student's typed answer as if submitted. The teacher's browser re-draws each photo as a JPEG (at most 2000 px on the long side; this drops metadata and fixes rotation), and the API strips any remaining metadata segments again before storing - no image library needed. **Teacher decisions (2026-10-14):** the student can also take or choose photos of their own pages on an open writing exercise (same JPEG re-draw and metadata stripping). They see only their own pages, and only until they submit; they can remove their pages and start again. Submitting locks the photos with the typed answer. The teacher still starts transcription.
 - FR-24. The harness transcribes photos verbatim (no correction, `[?]` for illegible words). Teacher sees a side-by-side screen (photos left, editable text right) and corrects the transcription. One response per exercise: the teacher designates which source (typed or transcription) is final.
 - FR-25. The transcription then goes through the same scrub, evaluation, and release flow. Photos are visible to the teacher, retained until the student is deleted, and are never shown to students - except a student's own pages, to that student, until they submit (FR-23). Students are told to write only their agreed first name on handwritten work.
 
-### 4.6 Revision (writing exercises only)
-- FR-26. After release, the student sees their text with coded spans and can tap a flagged span to edit only that span. One round; submit locks it. Grammar short answers are not revisable in v1.
-- FR-27. Originals, annotations, and revisions are stored separately. The teacher reads revisions side by side with changed spans highlighted and marks each attempted span `fixed`, `unfixed`, or `changed_wrongly`. **Teacher decision (2026-10-08):** only spans the student actually changed get an outcome; untouched spans get none. Like short answers, the student sees and revises the scrubbed (evaluated) text. Revisions are not sent to the harness in v1. **Teacher decision (2026-10-22):** once every changed span is marked, the teacher sends the outcomes to the student (`revision_reviewed`, shown to the student as "Corrections checked"); the marks are locked after sending. The student sees each changed span's outcome and, for spans not fixed, the suggested correction (an exception to FR-21; explanations stay hidden).
+### 4.6 Revision
+- FR-26. After release, the student sees their text with coded spans and can tap a flagged span to edit only that span. One round; submit locks it.
+- FR-27. Originals, annotations, and revisions are stored separately. The teacher reads revisions side by side with changed spans highlighted and marks each attempted span `fixed`, `unfixed`, or `changed_wrongly`. **Teacher decision (2026-10-08):** only spans the student actually changed get an outcome; untouched spans get none. The student sees and revises the scrubbed (evaluated) text. Revisions are not sent to the harness in v1. **Teacher decision (2026-10-22):** once every changed span is marked, the teacher sends the outcomes to the student (`revision_reviewed`, shown to the student as "Corrections checked"); the marks are locked after sending. The student sees each changed span's outcome and, for spans not fixed, the suggested correction (an exception to FR-21; explanations stay hidden).
 
 ### 4.7 Writing lessons
-- FR-28. Teacher triggers a lesson by describing it and pressing Generate. The harness drafts 200 to 400 words: explanation plus a few practice examples. Examples are read-only (not interactive), with answers shown.
-- FR-29. Same review loop: edit, regenerate with note, assign. Student reads it in-app and presses "Mark as read"; read status shows on the teacher overview.
+- FR-28 and FR-29. Removed: no AI-generated lessons.
 
 ### 4.8 Learner profile
-- FR-30. Per student, computed by plain code (never by the harness), from teacher-approved data only: counts per error code from approved annotations and wrong deterministic items, plus revision outcomes per code, within a recency window (default last 5 submissions, configurable in settings).
-- FR-31. Teacher can view the profile and keep private free-text notes per student. Notes are sent to the harness under the opaque ID. The notes field shows a warning: "Sent to the AI provider. No surnames or personal details."
+- FR-30. Per student, computed by plain code (never by the harness), from teacher-approved data only: counts per error code from approved annotations, plus revision outcomes per code, within a recency window (default last 5 submissions, configurable in settings).
+- FR-31. Teacher can view the profile and keep private free-text notes per student. Notes are never sent to the harness and never shown to the student.
 
 ### 4.9 Class overview (teacher)
-- FR-32. One screen listing each student with pending work and pipeline stage (assigned, in progress, submitted, awaiting transcription review, awaiting scrub, evaluating, draft ready, ready to release, released, revision open, revision submitted, revision checked) and unread lessons.
+- FR-32. One screen listing each student with pending work and pipeline stage (assigned, in progress, submitted, awaiting transcription review, awaiting scrub, evaluating, draft ready, ready to release, released, revision open, revision submitted, revision checked).
 
 ### 4.10 Operations
-- FR-33. The app logs each harness call's tokens and cost, shows monthly spend, and enforces a hard monthly cap in the app (estimate before call, record after). At the cap, generation/evaluation pause with a clear message. Cap is a setting.
+- FR-33. The app logs each harness call's tokens and cost, shows monthly spend, and enforces a hard monthly cap in the app (estimate before call, record after). At the cap, evaluation and transcription pause with a clear message. Cap is a setting.
 - FR-34. Harness failures or timeouts leave the job in a retryable error state; no work is lost.
 - FR-35. Student-facing UI is English only, plain language, large text, no jargon in errors.
 - FR-36. No in-app AI-use notice is required; the teacher informs students in class that their work is processed by an AI provider.
@@ -91,7 +85,7 @@ In scope: grammar and punctuation errors, including spelling and capitalization.
 - **Usability**: mobile-first student UI, laptop-first teacher UI, accessible contrast and text size.
 
 ## 6. Open items (decide during build)
-1. ~~Exact Claude model names per operation and Vertex region availability~~ **Resolved:** `claude-sonnet-5` for all five harness operations, via the `us` multi-region Vertex endpoint. Upgrade `evaluate_exercise`/`evaluate_writing`/`transcribe` to `claude-opus-5` only if golden-set results (HARNESS_SPEC.md section 9) show Sonnet missing or miscoding errors.
+1. ~~Exact Claude model names per operation and Vertex region availability~~ **Resolved:** `claude-sonnet-5` for both harness operations, via the `us` multi-region Vertex endpoint. Upgrade `evaluate_writing`/`transcribe` to `claude-opus-5` only if golden-set results (HARNESS_SPEC.md section 9) show Sonnet missing or miscoding errors.
 2. Teacher-provided golden set of 8 to 10 annotated passages (see HARNESS_SPEC.md section 9) before the first real student session.
 3. Whether to add a "word choice" code later (deliberately excluded now).
 4. Vertex AI Model Garden access for Claude models must be requested per-model before Phase 1 GCP setup; approval has no fixed SLA (seen stuck pending in 2026 reports) — request early so it isn't a blocker. **Confirmed 2026-10-08: access and serving quota are separate gates** — granting Model Garden access does not itself grant a nonzero per-minute request quota, and there is no self-service way to raise it (`gcloud alpha services quota update` caps the override at 0 for this metric). A real quota-increase request via Console is required too — see infra/README.md.

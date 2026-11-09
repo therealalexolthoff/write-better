@@ -7,19 +7,13 @@ already ran, not a shortcut that trusts it.
 """
 
 from shared.schemas import (
-    EvaluateExerciseRequest,
-    EvaluateExerciseResponse,
     EvaluateWritingRequest,
     EvaluateWritingResponse,
-    GenerateExerciseRequest,
-    GenerateExerciseResponse,
-    GenerateLessonRequest,
-    GenerateLessonResponse,
     TranscribeRequest,
     TranscribeResponse,
 )
 from shared.logs import log_event
-from shared.validation import check_item_ids, check_page_numbers, resolve_annotations
+from shared.validation import check_page_numbers, resolve_annotations
 
 from . import jobs, spend
 from .cost import estimate_cost
@@ -27,11 +21,8 @@ from .harness_client import post_to_harness
 from .settings import get_settings
 
 _OPERATIONS = {
-    "generate_exercise": (GenerateExerciseRequest, GenerateExerciseResponse),
     "transcribe": (TranscribeRequest, TranscribeResponse),
-    "evaluate_exercise": (EvaluateExerciseRequest, EvaluateExerciseResponse),
     "evaluate_writing": (EvaluateWritingRequest, EvaluateWritingResponse),
-    "generate_lesson": (GenerateLessonRequest, GenerateLessonResponse),
 }
 
 
@@ -45,16 +36,12 @@ class HarnessValidationFailed(Exception):
 
 def _validate_semantics(operation: str, req, result) -> None:
     """The semantic checks worth re-running independently of the harness:
-    annotation spans (docs/HARNESS_SPEC.md section 3), and that each item
-    or page sent came back exactly once, in order. Every
-    other rule (unique ids, permutations, codes, ...) is already enforced
-    by the shared Pydantic schema itself, which both sides parse with.
+    annotation spans (docs/HARNESS_SPEC.md section 3), and that each page
+    sent came back exactly once, in order. Every other rule (codes, page
+    numbers, ...) is already enforced by the shared Pydantic schema itself,
+    which both sides parse with.
     """
-    if operation == "evaluate_exercise":
-        check_item_ids([i.item_id for i in result.items], [i.item_id for i in req.items])
-        for item, item_req in zip(result.items, req.items, strict=True):
-            resolve_annotations(item.annotations, item_req.response)
-    elif operation == "evaluate_writing":
+    if operation == "evaluate_writing":
         resolve_annotations(result.annotations, req.text)
     elif operation == "transcribe":
         check_page_numbers([p.page for p in result.pages], len(req.pages))

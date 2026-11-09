@@ -89,9 +89,7 @@ def get_profile(student_id: str, user: CurrentUser = Depends(require_teacher)) -
 
 @router.put("/{student_id}/notes")
 def save_notes(student_id: str, body: NotesBody, user: CurrentUser = Depends(require_teacher)) -> dict:
-    """The teacher's notes. They are sent to the AI provider with
-    generation requests (under the opaque id - see context.py), which the
-    notes screen warns about."""
+    """The teacher's private notes. Never sent to the AI provider."""
     doc_ref = _student_doc(student_id)
     if not doc_ref.get().exists:
         raise _not_found()
@@ -137,13 +135,13 @@ def delete_student(
         raise HTTPException(status_code=400, detail="confirm_username does not match")
 
     # Everything the student owns (FR-4): photos, exercises, submissions,
-    # lessons, and the job records of their AI calls (a failed job's error
+    # and the job records of their AI calls (a failed job's error
     # can quote their text). The student record goes last, so if anything
     # fails partway, running the deletion again finds it and finishes.
     # The audit log keeps only ids, so its entries stay.
     photos.delete_folder(f"{student_id}/")
     db = get_db()
-    for collection in ("exercises", "submissions", "lessons", "jobs"):
+    for collection in ("exercises", "submissions", "jobs"):
         for owned in db.collection(collection).where(filter=FieldFilter("student_id", "==", student_id)).stream():
             db.collection(collection).document(owned.id).delete()
     identity.delete_user(doc.get("auth_uid"))

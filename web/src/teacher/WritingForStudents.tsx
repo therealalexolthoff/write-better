@@ -1,5 +1,5 @@
 // One writing exercise the teacher writes, assigned at once to the
-// students they pick (teacher decision 2026-10-14). No AI draft. Each
+// students they pick. The AI never writes exercises. Each
 // student gets their own copy, which then works like any other writing
 // exercise. The API checks everything again (api/app/exercises.py).
 import { useState, type FormEvent } from "react";
@@ -54,7 +54,7 @@ export default function WritingForStudents({ students, onDone }: { students: Stu
 
   return (
     <form onSubmit={review} className="panel stack">
-      <h2>Writing for several students</h2>
+      <h2>Assign writing</h2>
       <p className="muted">
         Write the prompt yourself. Each student you pick gets their own copy straight away. It can't be edited after
         assigning.

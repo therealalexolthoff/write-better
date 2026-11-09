@@ -1,4 +1,4 @@
-"""The five harness operations.
+"""The two harness operations: transcribe and evaluate_writing.
 
 Mock mode (HARNESS_MOCK_MODE) builds canned, schema-valid output locally;
 real mode calls Claude via claude_ops.call_claude, falling back to Gemini
@@ -17,24 +17,14 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 
 from shared.schemas import (
-    EvaluateExerciseRequest,
-    EvaluateExerciseResponse,
-    EvaluateExerciseResult,
     EvaluateWritingRequest,
     EvaluateWritingResponse,
     EvaluateWritingResult,
-    GenerateExerciseRequest,
-    GenerateExerciseResponse,
-    GenerateLessonRequest,
-    GenerateLessonResponse,
-    GrammarExerciseDraft,
-    LessonDraft,
     TranscribeRequest,
     TranscribeResponse,
     TranscribeResult,
-    WritingExerciseDraft,
 )
-from shared.validation import check_item_ids, check_page_numbers, resolve_annotations
+from shared.validation import check_page_numbers, resolve_annotations
 
 from . import mock, prompts
 from .claude_ops import call_claude
@@ -103,21 +93,6 @@ def _invalid_spans(exc: Exception) -> HTTPException:
     return HTTPException(status_code=500, detail=f"invalid annotation spans: {exc}")
 
 
-def generate_exercise(req: GenerateExerciseRequest) -> GenerateExerciseResponse:
-    start = time.monotonic()
-    if settings.mock_mode:
-        result = mock.mock_generate_exercise(req)
-        return _mock_response(req, result, GenerateExerciseResponse, start)
-
-    output_model = GrammarExerciseDraft if req.kind == "grammar" else WritingExerciseDraft
-    result, usage = _call_model(
-        system=prompts.GENERATE_EXERCISE_SYSTEM,
-        user_content=prompts.generate_exercise_user_content(req),
-        output_model=output_model,
-    )
-    return GenerateExerciseResponse(result=result, **usage)
-
-
 def transcribe(req: TranscribeRequest) -> TranscribeResponse:
     start = time.monotonic()
     if settings.mock_mode:
@@ -135,32 +110,6 @@ def transcribe(req: TranscribeRequest) -> TranscribeResponse:
         validate=check,
     )
     return TranscribeResponse(result=result, **usage)
-
-
-def evaluate_exercise(req: EvaluateExerciseRequest) -> EvaluateExerciseResponse:
-    start = time.monotonic()
-
-    def check(result: EvaluateExerciseResult) -> None:
-        check_item_ids([i.item_id for i in result.items], [i.item_id for i in req.items])
-        for item, item_req in zip(result.items, req.items, strict=True):
-            resolve_annotations(item.annotations, item_req.response)
-
-    if settings.mock_mode:
-        result = mock.mock_evaluate_exercise(req)
-        try:
-            check(result)
-        except Exception as exc:
-            raise _invalid_spans(exc) from exc
-        return _mock_response(req, result, EvaluateExerciseResponse, start)
-
-    result, usage = _call_model(
-        system=prompts.EVALUATE_EXERCISE_SYSTEM,
-        user_content=prompts.evaluate_exercise_user_content(req),
-        output_model=EvaluateExerciseResult,
-        gemini_thinking="medium",  # accuracy matters more than speed here
-        validate=check,
-    )
-    return EvaluateExerciseResponse(result=result, **usage)
 
 
 def evaluate_writing(req: EvaluateWritingRequest) -> EvaluateWritingResponse:
@@ -185,17 +134,3 @@ def evaluate_writing(req: EvaluateWritingRequest) -> EvaluateWritingResponse:
         validate=check,
     )
     return EvaluateWritingResponse(result=result, **usage)
-
-
-def generate_lesson(req: GenerateLessonRequest) -> GenerateLessonResponse:
-    start = time.monotonic()
-    if settings.mock_mode:
-        result = mock.mock_generate_lesson(req)
-        return _mock_response(req, result, GenerateLessonResponse, start)
-
-    result, usage = _call_model(
-        system=prompts.GENERATE_LESSON_SYSTEM,
-        user_content=prompts.generate_lesson_user_content(req),
-        output_model=LessonDraft,
-    )
-    return GenerateLessonResponse(result=result, **usage)

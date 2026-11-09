@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from api.app.main import app
 
 from .test_exercises import AUTH, harness, student  # noqa: F401 (fixtures)
-from .test_profile_lessons import _lesson
 from .test_writing import PHOTO, _assigned, bucket  # noqa: F401 (fixture)
 
 client = TestClient(app)
@@ -19,7 +18,8 @@ def test_delete_removes_all_their_data_and_photos(monkeypatch, fake_db, as_teach
 
     mine = _assigned(harness)
     client.post(f"/exercises/{mine}/photos", content=PHOTO, headers={"Content-Type": "image/jpeg", **AUTH})
-    _lesson(harness)
+    harness.result = {"pages": [{"page": 1, "text": "My weekend."}]}
+    assert client.post(f"/exercises/{mine}/transcribe", headers=AUTH).status_code == 200  # leaves a job record
     # Sam's work, which must survive.
     fake_db.collection("exercises").document("sams").set({"student_id": "s2", "title": "x"})
     fake_db.collection("jobs").document("sams-job").set({"student_id": "s2"})
@@ -30,7 +30,7 @@ def test_delete_removes_all_their_data_and_photos(monkeypatch, fake_db, as_teach
 
     assert bucket == {}
     assert deleted_logins == ["u1"]
-    for collection in ("exercises", "submissions", "lessons", "jobs"):
+    for collection in ("exercises", "submissions", "jobs"):
         assert all(doc.get("student_id") == "s2" for doc in fake_db.collection(collection).stream()), collection
     assert fake_db.collection("exercises").document("sams").get().exists
     assert fake_db.collection("jobs").document("sams-job").get().exists

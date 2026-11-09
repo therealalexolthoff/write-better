@@ -9,7 +9,7 @@ import { inPageOrder, toCleanJpeg, type PageLink } from "../photos";
 import SpannedText from "../SpannedText";
 import type { Annotation, Code, Outcome, TeacherExercise, WritingEvaluation } from "../types";
 import { wordCount } from "../words";
-import { AnnotationsEditor, withoutOffsets } from "./ShortAnswerReview";
+import { AnnotationsEditor, withoutOffsets } from "./AnnotationsEditor";
 
 // Mirrors the state lists in api/app/writing.py and review.py.
 const PHOTO_STATES = ["assigned", "in_progress", "transcript_review", "scrub_review"];

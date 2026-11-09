@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { ExerciseSummary, StudentLessonSummary } from "../types";
+import type { ExerciseSummary } from "../types";
 import DoExercise from "./DoExercise";
-import ReadLesson from "./ReadLesson";
 
 // Plain-English labels for the submission states (FR-35: no jargon).
 export function stateLabel(state: string): string {
@@ -15,24 +14,19 @@ export function stateLabel(state: string): string {
   return "Submitted – waiting for your teacher";
 }
 
-type Open = { kind: "exercise" | "lesson"; id: string } | null;
-
 export default function StudentApp() {
   const [exercises, setExercises] = useState<ExerciseSummary[] | null>(null);
-  const [lessons, setLessons] = useState<StudentLessonSummary[] | null>(null);
-  const [open, setOpen] = useState<Open>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) return;
-    const failed = () => setError("Could not load your work. Check your connection and try again.");
-    api<ExerciseSummary[]>("/me/exercises").then(setExercises).catch(failed);
-    api<StudentLessonSummary[]>("/me/lessons").then(setLessons).catch(failed);
+    api<ExerciseSummary[]>("/me/exercises")
+      .then(setExercises)
+      .catch(() => setError("Could not load your work. Check your connection and try again."));
   }, [open]);
 
-  const back = () => setOpen(null);
-  if (open?.kind === "exercise") return <DoExercise exerciseId={open.id} onBack={back} />;
-  if (open?.kind === "lesson") return <ReadLesson lessonId={open.id} onBack={back} />;
+  if (open) return <DoExercise exerciseId={open} onBack={() => setOpen(null)} />;
 
   return (
     <main className="page narrow">
@@ -43,29 +37,13 @@ export default function StudentApp() {
       <ul className="cards">
         {exercises?.map((ex) => (
           <li key={ex.exercise_id}>
-            <button className="card" onClick={() => setOpen({ kind: "exercise", id: ex.exercise_id })}>
+            <button className="card" onClick={() => setOpen(ex.exercise_id)}>
               <strong>{ex.title}</strong>
               <span className={`badge ${ex.state}`}>{stateLabel(ex.state)}</span>
             </button>
           </li>
         ))}
       </ul>
-
-      {!!lessons?.length && (
-        <>
-          <h2 className="section">Lessons</h2>
-          <ul className="cards">
-            {lessons.map((l) => (
-              <li key={l.lesson_id}>
-                <button className="card" onClick={() => setOpen({ kind: "lesson", id: l.lesson_id })}>
-                  <strong>{l.title}</strong>
-                  <span className={`badge ${l.read ? "" : "released"}`}>{l.read ? "Read" : "New – tap to read"}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
     </main>
   );
 }

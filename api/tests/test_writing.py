@@ -1,6 +1,6 @@
-"""Phase 6 flow: writing exercises, typed and handwritten, through scrub,
-evaluation, release and the one revision round - plus what each side may
-see along the way."""
+"""Writing exercises, typed and handwritten, through scrub, evaluation,
+release and the one revision round - plus what each side may see along
+the way, and one exercise for several students."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,11 +10,10 @@ from api.app.photos import strip_jpeg_metadata
 from api.app.revision import apply_revision
 
 from .conftest import as_student, become_teacher
-from .test_exercises import AUTH, harness, student  # noqa: F401 (fixtures)
+from .test_exercises import AUTH, WRITING, harness, student  # noqa: F401 (fixtures)
 
 client = TestClient(app)
 
-WRITING = {"kind": "writing", "title": "My weekend", "prompt": "Describe your weekend.", "min_words": 50, "max_words": 150}
 TYPED = "On saturday I go to the market with my sister Maria."
 SCRUBBED = "On saturday I go to the market with my sister [name]."
 TRANSCRIBED = "Yesterday I visit my freind [?] in the city."
@@ -50,16 +49,13 @@ def bucket(monkeypatch):
 
 
 def _assigned(harness):  # noqa: F811
-    """A writing exercise assigned to student s1, as the teacher."""
-    harness.result = WRITING
+    """A writing exercise assigned to student s1, as the teacher. (The
+    harness argument is kept so callers read the same as before.)"""
     response = client.post(
-        "/exercises/generate", json={"student_id": "s1", "kind": "writing", "description": "weekend"}, headers=AUTH
+        "/exercises/writing-for-students", json={"draft": WRITING, "student_ids": ["s1"]}, headers=AUTH
     )
     assert response.status_code == 200, response.text
-    exercise_id = response.json()["exercise_id"]
-    response = client.post(f"/exercises/{exercise_id}/assign", json={"answers_and_concepts_checked": True}, headers=AUTH)
-    assert response.status_code == 200, response.text
-    return exercise_id
+    return response.json()["exercise_ids"][0]
 
 
 def _typed_and_submitted(monkeypatch, harness):  # noqa: F811
@@ -87,37 +83,6 @@ def _released(monkeypatch, harness):  # noqa: F811
 
 def _submission(fake_db, exercise_id):
     return fake_db.collection("submissions").document(exercise_id).get().to_dict()
-
-
-# ---- generation and editing ----
-
-
-def test_generate_and_edit_a_writing_exercise(fake_db, as_teacher, harness, student):  # noqa: F811
-    harness.result = WRITING
-    response = client.post(
-        "/exercises/generate", json={"student_id": "s1", "kind": "writing", "description": "weekend"}, headers=AUTH
-    )
-    view = response.json()
-    assert view["kind"] == "writing" and view["prompt"] == WRITING["prompt"]
-    assert harness.calls[0]["kind"] == "writing"
-    exercise_id = view["exercise_id"]
-
-    edited = {**WRITING, "prompt": "Describe last Sunday.", "min_words": None}
-    view = client.put(f"/exercises/{exercise_id}", json=edited, headers=AUTH).json()
-    assert view["prompt"] == "Describe last Sunday." and view["min_words"] is None
-
-    too_few = {**WRITING, "min_words": 200, "max_words": 100}
-    assert client.put(f"/exercises/{exercise_id}", json=too_few, headers=AUTH).status_code == 422
-    # A writing exercise can't be turned into a grammar one by editing.
-    grammar = {"kind": "grammar", "title": "x", "items": [{"id": "i1", "type": "short_answer", "prompt": "Why?"}]}
-    assert client.put(f"/exercises/{exercise_id}", json=grammar, headers=AUTH).status_code == 422
-
-
-def test_wrong_kind_from_the_ai_is_rejected(fake_db, as_teacher, harness, student):  # noqa: F811
-    harness.result = WRITING  # but grammar was asked for
-    response = client.post("/exercises/generate", json={"student_id": "s1", "description": "x"}, headers=AUTH)
-    assert response.status_code == 502
-    assert fake_db.collection("exercises").stream() == []
 
 
 # ---- typed path through to revision ----
@@ -155,13 +120,10 @@ def test_typed_writing_full_flow(monkeypatch, fake_db, as_teacher, harness, stud
     edited["annotations"][0]["code"] = "VF"
     response = client.put(f"/exercises/{exercise_id}/evaluation", json=edited, headers=AUTH)
     assert response.status_code == 200, response.text
-    # A grammar-shaped evaluation doesn't fit a writing exercise.
-    grammar = {"items": [{"item_id": "text", "mark": "correct", "annotations": [], "feedback": "x"}]}
-    assert client.put(f"/exercises/{exercise_id}/evaluation", json=grammar, headers=AUTH).status_code == 422
 
     assert client.post(f"/exercises/{exercise_id}/approve", headers=AUTH).status_code == 200
     job = fake_db.collection("jobs").document(_submission(fake_db, exercise_id)["evaluation_job_id"]).get().to_dict()
-    assert job["teacher_action"] == "edited"  # no marks in writing, so never "overridden"
+    assert job["teacher_action"] == "edited"
 
     assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).json()["state"] == "revision_open"
 
@@ -363,16 +325,6 @@ def test_student_photos(monkeypatch, fake_db, as_teacher, harness, student, buck
     assert client.post(f"/exercises/{exercise_id}/transcribe", headers=AUTH).json()["state"] == "transcript_review"
 
 
-def test_student_photos_only_on_writing(monkeypatch, fake_db, as_teacher, harness, student, bucket):  # noqa: F811
-    harness.result = {"kind": "grammar", "title": "x", "items": [{"id": "i1", "type": "short_answer", "prompt": "Why?"}]}
-    exercise_id = client.post("/exercises/generate", json={"student_id": "s1", "description": "x"}, headers=AUTH).json()["exercise_id"]
-    client.post(f"/exercises/{exercise_id}/assign", json={"answers_and_concepts_checked": True}, headers=AUTH)
-    as_student(monkeypatch, student_id="s1")
-    jpeg = {"Content-Type": "image/jpeg", **AUTH}
-    assert client.post(f"/exercises/{exercise_id}/photos", content=PHOTO, headers=jpeg).status_code == 409
-    assert bucket == {}
-
-
 def test_failed_transcription_loses_nothing(monkeypatch, fake_db, as_teacher, harness, student, bucket):  # noqa: F811
     exercise_id = _assigned(harness)
     client.post(f"/exercises/{exercise_id}/photos", content=PHOTO, headers={"Content-Type": "image/jpeg", **AUTH})
@@ -428,7 +380,6 @@ def test_writing_for_several_students(monkeypatch, fake_db, as_teacher, harness,
     become_teacher(monkeypatch)
     view = client.get(f"/exercises/{first}", headers=AUTH).json()
     assert view["state"] == "scrub_review" and view["status"] == "assigned"
-    assert client.put(f"/exercises/{first}", json=draft, headers=AUTH).status_code == 409  # frozen once assigned
 
     # Teacher only.
     as_student(monkeypatch, student_id="s1")

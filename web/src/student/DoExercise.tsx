@@ -1,13 +1,12 @@
-// One exercise for the student: answer, autosave, submit; or, once
-// released, the results (correct/incorrect, right answer, explanation).
-// Writing: a response with a word count and, optionally, photos of
-// handwritten pages; then the coded results and the one revision round
-// (tap a flagged span, retype just those words).
+// One writing exercise for the student: a response with a word count
+// and, optionally, photos of handwritten pages; autosave and submit; then,
+// once released, the coded results and the one revision round (tap a
+// flagged span, retype just those words).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api";
 import { inPageOrder, toCleanJpeg, type PageLink } from "../photos";
 import SpannedText from "../SpannedText";
-import type { Answer, Answers, Outcome, StudentExercise, StudentItem, StudentSpan } from "../types";
+import type { Answers, Outcome, StudentExercise, StudentSpan } from "../types";
 import { wordCount } from "../words";
 import { stateLabel } from "./StudentApp";
 
@@ -38,11 +37,7 @@ export default function DoExercise({ exerciseId, onBack }: { exerciseId: string;
       {open ? (
         <AnswerForm exercise={exercise} onSubmitted={onBack} />
       ) : RESULTS_STATES.includes(exercise.state) ? (
-        exercise.kind === "writing" ? (
-          <WritingResults exercise={exercise} onRevised={load} />
-        ) : (
-          <Results exercise={exercise} />
-        )
+        <WritingResults exercise={exercise} onRevised={load} />
       ) : (
         <p className="notice">{stateLabel(exercise.state)}. You'll see your results here once they're ready.</p>
       )}
@@ -168,7 +163,6 @@ function SubmitButton({ question, onSubmit }: { question: string; onSubmit: () =
 function AnswerForm({ exercise, onSubmitted }: { exercise: StudentExercise; onSubmitted: () => void }) {
   const path = `/exercises/${exercise.exercise_id}`;
   const answers = useAutosave<Answers>(`${path}/answers`, "answers", exercise.answers);
-  const update = (itemId: string, answer: Answer) => answers.change({ ...answers.latest.current, [itemId]: answer });
 
   async function submit() {
     answers.stop();
@@ -179,21 +173,9 @@ function AnswerForm({ exercise, onSubmitted }: { exercise: StudentExercise; onSu
   return (
     <>
       <SaveStatusLine status={answers.status} saveError={answers.saveError} />
-      {exercise.kind === "writing" ? (
-        <>
-          <WritingInput exercise={exercise} text={(answers.value.text as string) ?? ""} onChange={(t) => update("text", t)} />
-          <HandwrittenPages exerciseId={exercise.exercise_id} />
-        </>
-      ) : (
-        <ol className="items">
-          {exercise.items.map((item) => (
-            <li key={item.id} className="item">
-              <ItemInput item={item} answer={answers.value[item.id]} onChange={(a) => update(item.id, a)} />
-            </li>
-          ))}
-        </ol>
-      )}
-      <SubmitButton question="You can't change your answers after this." onSubmit={submit} />
+      <WritingInput exercise={exercise} text={answers.value.text ?? ""} onChange={(text) => answers.change({ text })} />
+      <HandwrittenPages exerciseId={exercise.exercise_id} />
+      <SubmitButton question="You can't change your writing after this." onSubmit={submit} />
     </>
   );
 }
@@ -323,94 +305,7 @@ function HandwrittenPages({ exerciseId }: { exerciseId: string }) {
   );
 }
 
-function ItemInput({ item, answer, onChange }: { item: StudentItem; answer?: Answer; onChange: (a: Answer) => void }) {
-  if (item.type === "fill_blank") {
-    const filled = (answer as Record<string, string>) ?? {};
-    const parts = item.text!.split(/_{3,}/);
-    return (
-      <>
-        <p className="instruction">Type the missing word or words.</p>
-        <p className="sentence">
-          {parts.map((part, i) => (
-            <span key={i}>
-              {part}
-              {i < item.blank_ids!.length && (
-                <input
-                  className="blank"
-                  aria-label={`Blank ${i + 1}`}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  value={filled[item.blank_ids![i]] ?? ""}
-                  onChange={(e) => onChange({ ...filled, [item.blank_ids![i]]: e.target.value })}
-                />
-              )}
-            </span>
-          ))}
-        </p>
-      </>
-    );
-  }
-
-  if (item.type === "reorder") {
-    // Tap-to-place (FR-14): tap a word to add it to your sentence; tap a
-    // word in your sentence to take it back out.
-    const placed = (answer as number[]) ?? [];
-    const chunks = item.chunks!;
-    return (
-      <>
-        <p className="instruction">Tap the words in the right order to make a sentence. Tap a word in your sentence to take it back.</p>
-        <div className="placed" aria-label="Your sentence">
-          {placed.length === 0 && <span className="hint">Your sentence will appear here.</span>}
-          {placed.map((idx, pos) => (
-            <button key={pos} className="chip placed-chip" onClick={() => onChange(placed.filter((_, p) => p !== pos))}>
-              {chunks[idx]}
-            </button>
-          ))}
-        </div>
-        <div className="pool" aria-label="Words to use">
-          {chunks.map((chunk, idx) =>
-            placed.includes(idx) ? null : (
-              <button key={idx} className="chip" onClick={() => onChange([...placed, idx])}>
-                {chunk}
-              </button>
-            ),
-          )}
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <p className="instruction">{item.prompt}</p>
-      <textarea rows={5} value={(answer as string) ?? ""} onChange={(e) => onChange(e.target.value)} />
-    </>
-  );
-}
-
-// ---- grammar results ----
-
-function Results({ exercise }: { exercise: StudentExercise }) {
-  return (
-    <ol className="items">
-      {exercise.items.map((item) => (
-        <li key={item.id} className={`item ${resultClass(item)}`}>
-          <ResultItem item={item} answer={exercise.answers[item.id]} />
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function resultClass(item: StudentItem): string {
-  if (item.type === "short_answer") {
-    return item.mark === "correct" ? "right" : item.mark === "incorrect" ? "wrong" : item.mark ? "partial" : "";
-  }
-  return item.correct === undefined ? "" : item.correct ? "right" : "wrong";
-}
-
-const MARK_TEXT = { correct: "✓ Correct", partial: "◐ Partly correct", incorrect: "✗ Not quite" };
+// ---- writing results and revision ----
 
 // What each code on the page means. Tap or hover a code to see it too.
 function Legend({ spans }: { spans: StudentSpan[] }) {
@@ -424,58 +319,6 @@ function Legend({ spans }: { spans: StudentSpan[] }) {
     </ul>
   );
 }
-
-function ResultItem({ item, answer }: { item: StudentItem; answer?: Answer }) {
-  if (item.type === "short_answer") {
-    // FR-21: the mark, the feedback sentence, and the answer with each
-    // error marked by its code.
-    if (!item.mark) {
-      return (
-        <>
-          <p className="instruction">{item.prompt}</p>
-          <p className="your-answer">{(answer as string) || "(no answer)"}</p>
-        </>
-      );
-    }
-    const spans = item.spans ?? [];
-    return (
-      <>
-        <p className="verdict">{MARK_TEXT[item.mark]}</p>
-        <p className="instruction">{item.prompt}</p>
-        <SpannedText text={item.answer_text ?? ""} spans={spans} />
-        <Legend spans={spans} />
-        {item.feedback && <p className="explanation">{item.feedback}</p>}
-      </>
-    );
-  }
-
-  let yours: string;
-  let right: string | null = null;
-  if (item.type === "fill_blank") {
-    const filled = (answer as Record<string, string>) ?? {};
-    yours = fillSentence(item.text!, item.blank_ids!, filled);
-    if (item.correct_answer) right = fillSentence(item.text!, item.blank_ids!, item.correct_answer as Record<string, string>);
-  } else {
-    yours = ((answer as number[]) ?? []).map((i) => item.chunks![i]).join(" ") || "(no answer)";
-    if (item.correct_answer) right = (item.correct_answer as string[]).join(" ");
-  }
-
-  return (
-    <>
-      <p className="verdict">{item.correct ? "✓ Correct" : "✗ Not quite"}</p>
-      <p className="your-answer">Your answer: {yours}</p>
-      {right && <p className="right-answer">Correct answer: {right}</p>}
-      {item.explanation && <p className="explanation">{item.explanation}</p>}
-    </>
-  );
-}
-
-function fillSentence(text: string, blankIds: string[], values: Record<string, string>): string {
-  let i = 0;
-  return text.replace(/_{3,}/g, () => `[${values[blankIds[i++]] || "…"}]`);
-}
-
-// ---- writing results and revision ----
 
 function WritingResults({ exercise, onRevised }: { exercise: StudentExercise; onRevised: () => void }) {
   const spans = exercise.spans ?? [];

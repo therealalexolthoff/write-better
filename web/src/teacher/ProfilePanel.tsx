@@ -37,7 +37,7 @@ export default function ProfilePanel({ studentId }: { studentId: string }) {
         <h2>Recent errors</h2>
         <p className="muted">
           From the last {profile.submissions_counted} approved submission(s) (the window is {profile.window}). Counts
-          approved annotations, wrong fill-in and word-order items, and revision outcomes you marked.
+          the errors you approved and the revision outcomes you marked.
         </p>
         {profile.codes.length === 0 ? (
           <p>Nothing recorded yet.</p>
@@ -64,8 +64,7 @@ export default function ProfilePanel({ studentId }: { studentId: string }) {
 
       <section className="panel stack">
         <h2>Your notes</h2>
-        <p className="notice">Sent to the AI provider. No surnames or personal details.</p>
-        <p className="muted">Put the newest notes at the top: only the first 1,500 characters are sent.</p>
+        <p className="muted">Private to you: never shown to the student and never sent to the AI.</p>
         <textarea
           rows={8}
           value={notes}

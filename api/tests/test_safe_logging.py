@@ -33,7 +33,7 @@ def test_failed_ai_call_logs_only_the_error_type(monkeypatch, fake_db, as_teache
     exercise_id = _submitted(monkeypatch, harness)
     # The AI flags a span that isn't in the text: the API rejects it, and
     # the rejection message would quote the span.
-    result = _evaluation(span="my sister Maria")
+    result = _evaluation(span="my brother Maria")
     harness.result = result
     capsys.readouterr()
     response = client.post(f"/exercises/{exercise_id}/evaluate", json={"note": ""}, headers=AUTH)

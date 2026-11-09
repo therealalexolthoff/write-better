@@ -49,8 +49,8 @@ def complete_job(
 
 
 def set_teacher_action(job_id: str, action: str) -> None:
-    """What the teacher did with this job's output: "accepted", "edited",
-    "overridden" or "regenerated" - the override-rate quality signal
+    """What the teacher did with this job's output: "accepted", "edited"
+    or "regenerated" - the override-rate quality signal
     (docs/ARCHITECTURE.md section 8)."""
     get_db().collection("jobs").document(job_id).update({"teacher_action": action})
 

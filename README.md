@@ -4,7 +4,7 @@ A free web app that helps adult language learners write better English. Students
 
 The AI drafts; the teacher decides. Nothing the AI produces reaches a student without the teacher's approval.
 
-> **Status: being built.** Write Better is being rebuilt from a single-teacher app. Until Phase 1 of `docs/BUILD_PLAN.md` is done, the code still contains that app's grammar exercises and lessons, and it supports only one teacher. The plan lists every phase.
+> **Status: being built.** Write Better is being rebuilt from a single-teacher app. Phase 1 is done: the app reviews writing only. It still supports just one teacher until Phase 2, and the public pages, admin and classes come in later phases. `docs/BUILD_PLAN.md` lists every phase.
 
 ## What it will do
 
@@ -53,7 +53,7 @@ Phone / laptop (React)
 ```
 
 - **API** (`api/`): all business logic, authorization, grading, scrubbing, the spend cap and the learner profile. It also serves the built frontend.
-- **Harness** (`harness/`): a stateless AI service. It has five operations today: generate exercise, transcribe, evaluate exercise, evaluate writing, and generate lesson. Phase 1 cuts it to transcribe and evaluate writing. It has no database or storage access.
+- **Harness** (`harness/`): a stateless AI service with two operations: transcribe and evaluate writing. It has no database or storage access, and it never writes exercises.
 - **Shared** (`shared/`): the schemas, the 14-code error taxonomy and the validation that both services use.
 - **Web** (`web/`): the React frontend. It only collects input; every rule lives in the Python API.
 

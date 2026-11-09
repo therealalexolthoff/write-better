@@ -1,5 +1,5 @@
-"""Phase 4 flow: generate -> edit/regenerate -> assign -> autosave ->
-submit -> release, plus who may see what along the way."""
+"""Writing exercises: assign -> autosave -> submit, plus who may see what
+along the way, reopening, and the shared fixtures other test files use."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,30 +11,8 @@ from .conftest import as_student, become_teacher
 client = TestClient(app)
 AUTH = {"Authorization": "Bearer t"}
 
-DRAFT = {
-    "kind": "grammar",
-    "title": "Past tense practice",
-    "items": [
-        {
-            "id": "i1",
-            "type": "fill_blank",
-            "text": "She ___ to school yesterday.",
-            "blanks": [{"id": "b1", "accepted": ["went"]}],
-            "concept": "VT",
-            "explanation": "Past tense of 'go' is 'went'.",
-        },
-        {
-            "id": "i2",
-            "type": "reorder",
-            "chunks": ["always", "I", "eat", "breakfast"],
-            "accepted_orders": [["I", "always", "eat", "breakfast"]],
-            "concept": "WO",
-            "explanation": "Frequency adverbs go after the subject.",
-        },
-    ],
-}
-RIGHT = {"i1": {"b1": "went"}, "i2": [1, 0, 2, 3]}
-WRONG = {"i1": {"b1": "goed"}, "i2": [0, 1, 2, 3]}
+WRITING = {"kind": "writing", "title": "My weekend", "prompt": "Describe your weekend.", "min_words": 50, "max_words": 150}
+TYPED = "On saturday I go to the market with my sister Maria."
 
 
 def _envelope(result):
@@ -47,7 +25,7 @@ def harness(monkeypatch):
     what it returns; records each request body it receives."""
 
     class Fake:
-        result = DRAFT
+        result: dict = {}
         calls: list = []
 
         def __call__(self, path, body):
@@ -66,163 +44,73 @@ def student(fake_db):
     fake_db.collection("students").document("s2").set({"username": "Sam", "auth_uid": "u2", "active": True})
 
 
-def _generate(student_id="s1"):
+def _assign(student_id="s1", draft=WRITING):
+    """A writing exercise assigned to one student, as the teacher."""
     response = client.post(
-        "/exercises/generate", json={"student_id": student_id, "description": "past tense"}, headers=AUTH
+        "/exercises/writing-for-students", json={"draft": draft, "student_ids": [student_id]}, headers=AUTH
     )
     assert response.status_code == 200, response.text
-    return response.json()["exercise_id"]
+    return response.json()["exercise_ids"][0]
 
 
-def _assign(exercise_id):
-    response = client.post(
-        f"/exercises/{exercise_id}/assign", json={"answers_and_concepts_checked": True}, headers=AUTH
-    )
-    assert response.status_code == 200, response.text
-
-
-# ---- generation ----
-
-
-def test_generate_stores_draft_and_records_job(fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    exercise = fake_db.collection("exercises").document(exercise_id).get().to_dict()
-    assert exercise["status"] == "draft"
-    assert exercise["items"][0]["blanks"][0]["accepted"] == ["went"]
-    assert [j.get("status") for j in fake_db.collection("jobs").stream()] == ["done"]
-    # Only the opaque id goes to the harness, never the username.
-    assert harness.calls[0]["student_id"] == "s1"
-    assert "Alex" not in str(harness.calls[0])
-
-
-def test_student_cannot_generate(monkeypatch, fake_db, harness, student):
-    as_student(monkeypatch, student_id="s1")
-    response = client.post("/exercises/generate", json={"student_id": "s1", "description": "x"}, headers=AUTH)
-    assert response.status_code == 403
-
-
-def test_invalid_harness_output_is_never_saved(fake_db, as_teacher, harness, student):
-    bad = {**DRAFT, "items": [{**DRAFT["items"][0], "concept": "NOPE"}]}
-    harness.result = bad
-    response = client.post("/exercises/generate", json={"student_id": "s1", "description": "x"}, headers=AUTH)
-    assert response.status_code == 502
-    assert fake_db.collection("exercises").stream() == []
-
-
-def test_spend_cap_blocks_generation(fake_db, as_teacher, harness, student):
-    fake_db.collection("settings").document("global").set({"monthly_cap_usd": 0.0})
-    response = client.post("/exercises/generate", json={"student_id": "s1", "description": "x"}, headers=AUTH)
-    assert response.status_code == 409
-    assert harness.calls == []
-
-
-# ---- teacher editing ----
-
-
-def test_edit_is_validated_with_the_shared_schema(fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    two_markers = {**DRAFT, "items": [{**DRAFT["items"][0], "text": "She ___ and ___."}]}
-    assert client.put(f"/exercises/{exercise_id}", json=two_markers, headers=AUTH).status_code == 422
-
-    edited = {**DRAFT, "title": "Edited"}
-    response = client.put(f"/exercises/{exercise_id}", json=edited, headers=AUTH)
-    assert response.status_code == 200
-    assert response.json()["title"] == "Edited"
-
-
-def test_regenerate_keeps_previous_version(fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    harness.result = {**DRAFT, "title": "Second try"}
-    response = client.post(f"/exercises/{exercise_id}/regenerate", json={"note": "harder"}, headers=AUTH)
-    assert response.json()["title"] == "Second try"
-    assert harness.calls[1]["regenerate_note"] == "harder"
-    history = fake_db.collection("exercises").document(exercise_id).get().get("generation_history")
-    assert history[0]["title"] == "Past tense practice"
-    assert history[0]["note"] == "harder"
-
-
-def test_assign_requires_checklist_and_freezes(fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    response = client.post(
-        f"/exercises/{exercise_id}/assign", json={"answers_and_concepts_checked": False}, headers=AUTH
-    )
-    assert response.status_code == 422
-    _assign(exercise_id)
-    assert client.put(f"/exercises/{exercise_id}", json=DRAFT, headers=AUTH).status_code == 409
-    assert client.post(f"/exercises/{exercise_id}/regenerate", json={}, headers=AUTH).status_code == 409
+def _submission(fake_db, exercise_id):
+    return fake_db.collection("submissions").document(exercise_id).get().to_dict()
 
 
 # ---- what students can see ----
 
 
-def test_student_cannot_see_drafts_or_other_students_work(monkeypatch, fake_db, as_teacher, harness, student):
-    draft_id = _generate("s1")
-    other_id = _generate("s2")
-    _assign(other_id)
+def test_student_cannot_see_other_students_work(monkeypatch, fake_db, as_teacher, harness, student):
+    other_id = _assign("s2")
 
     as_student(monkeypatch, student_id="s1")
-    assert client.get(f"/exercises/{draft_id}", headers=AUTH).status_code == 404
     assert client.get(f"/exercises/{other_id}", headers=AUTH).status_code == 404
     assert client.put(f"/exercises/{other_id}/answers", json={"answers": {}}, headers=AUTH).status_code == 404
+    assert client.post(f"/exercises/{other_id}/submit", json={"answers": {}}, headers=AUTH).status_code == 404
     assert client.get("/me/exercises", headers=AUTH).json() == []
 
 
-def test_student_view_hides_answer_keys_before_release(monkeypatch, fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
-
+def test_student_view_shows_the_prompt_but_no_teacher_fields(monkeypatch, fake_db, as_teacher, harness, student):
+    exercise_id = _assign()
     as_student(monkeypatch, student_id="s1")
-    body = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
-    text = str(body)
-    for hidden in ("accepted", "explanation", "concept", "teacher_request", "correct", "went"):
-        assert hidden not in text, hidden
-    assert body["items"][0]["blank_ids"] == ["b1"]
-    assert body["items"][1]["chunks"] == ["always", "I", "eat", "breakfast"]
+    view = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
+    assert view["prompt"] == WRITING["prompt"] and view["max_words"] == 150 and view["state"] == "assigned"
+    for hidden in ("teacher_request", "scrubbed_answers", "evaluation", "student_id", "photo_count"):
+        assert hidden not in view, hidden
 
 
-# ---- doing and submitting ----
+# ---- writing and submitting ----
 
 
-def test_autosave_submit_release_flow(monkeypatch, fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
+def test_autosave_then_submit_locks_the_response(monkeypatch, fake_db, as_teacher, harness, student):
+    exercise_id = _assign()
 
     as_student(monkeypatch, student_id="s1")
     assert client.get("/me/exercises", headers=AUTH).json()[0]["state"] == "assigned"
-    saved = client.put(f"/exercises/{exercise_id}/answers", json={"answers": {"i1": {"b1": "go"}}}, headers=AUTH)
-    assert saved.status_code == 200
+    assert client.put(f"/exercises/{exercise_id}/answers", json={"answers": {"text": "On sat"}}, headers=AUTH).status_code == 200
     resumed = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
-    assert resumed["state"] == "in_progress"
-    assert resumed["answers"] == {"i1": {"b1": "go"}}
+    assert resumed["state"] == "in_progress" and resumed["answers"] == {"text": "On sat"}
 
-    submit = {"answers": {"i1": {"b1": "went"}, "i2": [0, 1, 2, 3]}}  # first right, second wrong
+    submit = {"answers": {"text": TYPED}}
     assert client.post(f"/exercises/{exercise_id}/submit", json=submit, headers=AUTH).status_code == 200
     # Locked after submit, and still no results before release.
     assert client.put(f"/exercises/{exercise_id}/answers", json=submit, headers=AUTH).status_code == 409
     assert client.post(f"/exercises/{exercise_id}/submit", json=submit, headers=AUTH).status_code == 409
-    assert "correct" not in str(client.get(f"/exercises/{exercise_id}", headers=AUTH).json()["items"])
+    view = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
+    assert "spans" not in view and "comment" not in view
 
     become_teacher(monkeypatch)
-    teacher_view = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
-    assert teacher_view["state"] == "ready_to_release"
-    assert teacher_view["grades"] == {"i1": True, "i2": False}
-    assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).status_code == 200
+    view = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()
+    assert view["state"] == "scrub_review" and view["final_source"] == "typed"
+    assert view["answers"] == {"text": TYPED}
+    assert view["scrubbed_answers"] == {"text": TYPED}  # the editable copy starts as the original
+    assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).status_code == 409  # not evaluated
 
+
+def test_answers_must_be_just_the_text(monkeypatch, fake_db, as_teacher, harness, student):
+    exercise_id = _assign()
     as_student(monkeypatch, student_id="s1")
-    items = client.get(f"/exercises/{exercise_id}", headers=AUTH).json()["items"]
-    assert items[0]["correct"] is True
-    assert "correct_answer" not in items[0]  # only shown for wrong items
-    assert items[1]["correct"] is False
-    assert items[1]["correct_answer"] == ["I", "always", "eat", "breakfast"]
-    assert items[1]["explanation"] == "Frequency adverbs go after the subject."
-    assert "concept" not in str(items)
-
-
-def test_answers_must_match_item_shapes(monkeypatch, fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
-    as_student(monkeypatch, student_id="s1")
-    for bad in ({"nope": "x"}, {"i1": "went"}, {"i2": {"b1": "x"}}, {"i1": {"zz": "x"}}):
+    for bad in ({"i1": "x"}, {"text": "x", "extra": "y"}, {"text": ["x"]}, {"text": "x" * 10_001}):
         response = client.put(f"/exercises/{exercise_id}/answers", json={"answers": bad}, headers=AUTH)
         assert response.status_code == 422, bad
 
@@ -231,63 +119,67 @@ def test_late_autosave_cannot_undo_a_submit(monkeypatch, fake_db, as_teacher, ha
     """An autosave already on its way when the student taps Submit reads
     "in_progress"; the submit lands before the autosave writes. The
     autosave must then fail rather than unlock the submitted work."""
-    exercise_id = _generate()
-    _assign(exercise_id)
+    exercise_id = _assign()
     as_student(monkeypatch, student_id="s1")
 
-    def submit_lands_meanwhile(draft, answers):
-        fake_db.collection("submissions").document(exercise_id).update({"state": "ready_to_release"})
+    def submit_lands_meanwhile(answers):
+        fake_db.collection("submissions").document(exercise_id).update({"state": "scrub_review"})
 
     monkeypatch.setattr("api.app.exercises._check_answer_shapes", submit_lands_meanwhile)
-    response = client.put(f"/exercises/{exercise_id}/answers", json={"answers": RIGHT}, headers=AUTH)
+    response = client.put(f"/exercises/{exercise_id}/answers", json={"answers": {"text": "x"}}, headers=AUTH)
     assert response.status_code == 409
-    assert fake_db.collection("submissions").document(exercise_id).get().get("state") == "ready_to_release"
-
-
-def test_reorder_answer_cannot_be_longer_than_its_chunks(monkeypatch, fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
-    as_student(monkeypatch, student_id="s1")
-    too_long = {"answers": {"i2": list(range(10_000))}}
-    assert client.put(f"/exercises/{exercise_id}/answers", json=too_long, headers=AUTH).status_code == 422
-
-
-def test_short_answers_go_to_scrub_review(monkeypatch, fake_db, as_teacher, harness, student):
-    harness.result = {**DRAFT, "items": DRAFT["items"] + [{"id": "i3", "type": "short_answer", "prompt": "Why?"}]}
-    exercise_id = _generate()
-    _assign(exercise_id)
-    as_student(monkeypatch, student_id="s1")
-    client.post(f"/exercises/{exercise_id}/submit", json={"answers": {**RIGHT, "i3": "Because."}}, headers=AUTH)
-    assert fake_db.collection("submissions").document(exercise_id).get().get("state") == "scrub_review"
+    assert _submission(fake_db, exercise_id)["state"] == "scrub_review"
 
 
 def test_teacher_cannot_answer_for_a_student(fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
-    response = client.put(f"/exercises/{exercise_id}/answers", json={"answers": RIGHT}, headers=AUTH)
+    exercise_id = _assign()
+    response = client.put(f"/exercises/{exercise_id}/answers", json={"answers": {"text": "x"}}, headers=AUTH)
     assert response.status_code == 403
+    assert client.get("/me/exercises", headers=AUTH).status_code == 403
+
+
+# ---- reopening ----
 
 
 def test_reopen_is_audited_and_not_allowed_after_release(monkeypatch, fake_db, as_teacher, harness, student):
-    exercise_id = _generate()
-    _assign(exercise_id)
+    exercise_id = _assign()
     as_student(monkeypatch, student_id="s1")
-    client.post(f"/exercises/{exercise_id}/submit", json={"answers": WRONG}, headers=AUTH)
+    client.post(f"/exercises/{exercise_id}/submit", json={"answers": {"text": TYPED}}, headers=AUTH)
 
     become_teacher(monkeypatch)
     assert client.post(f"/exercises/{exercise_id}/reopen", headers=AUTH).status_code == 200
-    submission = fake_db.collection("submissions").document(exercise_id).get().to_dict()
+    submission = _submission(fake_db, exercise_id)
     assert submission["state"] == "in_progress"
-    assert submission["answers"] == WRONG  # kept so the student can continue
+    assert submission["answers"] == {"text": TYPED}  # kept so the student can continue
     assert any(e.get("action") == "reopen_submission" for e in fake_db.collection("audit").stream())
 
+    # Evaluated with nothing flagged and released: no longer reopenable.
     as_student(monkeypatch, student_id="s1")
-    client.post(f"/exercises/{exercise_id}/submit", json={"answers": RIGHT}, headers=AUTH)
+    client.post(f"/exercises/{exercise_id}/submit", json={"answers": {"text": TYPED}}, headers=AUTH)
     become_teacher(monkeypatch)
-    client.post(f"/exercises/{exercise_id}/release", headers=AUTH)
+    harness.result = {"annotations": [], "comment": "No errors."}
+    assert client.post(f"/exercises/{exercise_id}/evaluate", json={"note": ""}, headers=AUTH).status_code == 200
+    client.post(f"/exercises/{exercise_id}/approve", headers=AUTH)
+    assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).json()["state"] == "released"
     assert client.post(f"/exercises/{exercise_id}/reopen", headers=AUTH).status_code == 409
 
 
 def test_taxonomy_comes_from_the_shared_list(fake_db, as_teacher):
     codes = [c["code"] for c in client.get("/taxonomy", headers=AUTH).json()]
     assert len(codes) == 14 and "VT" in codes
+
+
+def test_cut_features_are_gone(fake_db, as_teacher, harness, student):
+    """Write Better has no AI-generated exercises, grammar items or lessons."""
+    for method, path in (
+        ("POST", "/exercises/generate"),
+        ("POST", "/exercises/x/regenerate"),
+        ("POST", "/exercises/x/assign"),
+        ("POST", "/lessons/generate"),
+        ("GET", "/me/lessons"),
+    ):
+        assert client.request(method, path, json={}, headers=AUTH).status_code in (404, 405), path
+    grammar = {"kind": "grammar", "title": "x", "items": [{"id": "i1", "type": "short_answer", "prompt": "Why?"}]}
+    response = client.post("/exercises/writing-for-students", json={"draft": grammar, "student_ids": ["s1"]}, headers=AUTH)
+    assert response.status_code == 422
+    assert harness.calls == []

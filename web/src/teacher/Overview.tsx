@@ -1,5 +1,5 @@
 // The class overview (FR-32): each student's unfinished work with its
-// stage, and lessons they haven't read yet. Built by api/app/overview.py.
+// stage. Built by api/app/overview.py.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { OverviewRow } from "../types";
@@ -29,7 +29,7 @@ export default function Overview({
   return (
     <table className="overview">
       <thead>
-        <tr><th>Student</th><th>Work in progress</th><th>Unread lessons</th></tr>
+        <tr><th>Student</th><th>Work in progress</th></tr>
       </thead>
       <tbody>
         {rows.map((row) => (
@@ -47,15 +47,6 @@ export default function Overview({
                   </li>
                 ))}
               </ul>
-            </td>
-            <td>
-              {row.unread_lessons.length === 0 ? (
-                <span className="muted">—</span>
-              ) : (
-                <ul className="plain">
-                  {row.unread_lessons.map((l) => <li key={l.lesson_id}>{l.title}</li>)}
-                </ul>
-              )}
             </td>
           </tr>
         ))}

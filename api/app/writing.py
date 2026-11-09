@@ -1,7 +1,5 @@
-"""Writing exercises: handwritten work and revision (docs/BUILD_PLAN.md
-Phase 6). Generating, assigning, typing, submitting, scrubbing and
-evaluating a writing exercise use the same endpoints as grammar
-(exercises.py, review.py); this module has what only writing needs.
+"""Handwritten work and the revision round. Assigning, typing,
+submitting, scrubbing and evaluating are in exercises.py and review.py.
 
 Handwriting (FR-23 to FR-25):
 1. Upload photos of the pages, in page order. The teacher can do this any
@@ -79,7 +77,7 @@ def _now() -> datetime:
 def _load_writing(exercise_id: str, allowed_states: tuple[str, ...]) -> tuple[dict, dict]:
     exercise = _load_exercise(exercise_id)
     submission = _load_submission(exercise_id)
-    if exercise["kind"] != "writing" or submission is None:
+    if submission is None:
         raise HTTPException(status_code=409, detail="This isn't an assigned writing exercise.")
     if submission["state"] not in allowed_states:
         raise HTTPException(status_code=409, detail="This exercise isn't at that stage.")
@@ -113,13 +111,6 @@ def _links(pages: list[dict]) -> list[dict]:
     return [{"page": number, "url": photos.signed_url(page["path"])} for number, page in enumerate(pages, start=1)]
 
 
-def _load_student_writing(exercise_id: str, user: CurrentUser) -> dict:
-    exercise = load_for_student(exercise_id, user)
-    if exercise["kind"] != "writing":
-        raise HTTPException(status_code=409, detail="Photos are only for writing exercises.")
-    return exercise
-
-
 def _student_pages(exercise_id: str) -> list[dict]:
     """The student's own pages, as short-lived links - only while the
     exercise is open. After submitting they see no photos (FR-25), and
@@ -150,7 +141,7 @@ def upload_photo(
 
 
 def _student_upload(exercise_id: str, data: bytes, user: CurrentUser) -> list[dict]:
-    exercise = _load_student_writing(exercise_id, user)
+    exercise = load_for_student(exercise_id, user)
     if len((_load_submission(exercise_id) or {}).get("photos", [])) >= MAX_PAGES:
         raise HTTPException(status_code=409, detail=f"You can add at most {MAX_PAGES} pages.")
     page = _store_page(exercise_id, exercise["student_id"], data, "student")
@@ -189,7 +180,7 @@ def remove_photos(exercise_id: str, user: CurrentUser = Depends(get_current_user
 
 
 def _student_remove(exercise_id: str, user: CurrentUser) -> list[dict]:
-    _load_student_writing(exercise_id, user)
+    load_for_student(exercise_id, user)
     removed: list[str] = []
 
     def keep_teachers_pages(current: dict) -> dict:
@@ -209,7 +200,7 @@ def photo_links(exercise_id: str, user: CurrentUser = Depends(get_current_user))
     every page; a student sees only their own, and only until they submit
     (FR-25)."""
     if user.role == "student":
-        _load_student_writing(exercise_id, user)
+        load_for_student(exercise_id, user)
         return _student_pages(exercise_id)
     if user.role != "teacher":
         raise HTTPException(status_code=403, detail="teacher only")
@@ -223,7 +214,7 @@ def transcribe(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -
     fails, the submission goes back to where it was (FR-34)."""
     exercise = _load_exercise(exercise_id)
     submission = _load_submission(exercise_id)
-    if exercise["kind"] != "writing" or submission is None:
+    if submission is None:
         raise HTTPException(status_code=409, detail="This isn't an assigned writing exercise.")
     state = submission["state"]
     stale = state == "transcribing" and _now() - submission["transcribing_since"] > _STALE_TRANSCRIPTION
