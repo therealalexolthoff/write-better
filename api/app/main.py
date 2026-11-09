@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 
 from shared.logs import catch_unexpected_errors
 
+from .security_headers import add_security_headers
+
 from .admin import router as admin_router
 from .assignments import router as assignments_router
 from .classes import router as classes_router
@@ -27,6 +29,7 @@ from .writing import router as writing_router
 
 app = FastAPI(title="Write Better API")
 catch_unexpected_errors(app)  # no tracebacks in the logs: they can quote student text
+add_security_headers(app)
 app.include_router(classes_router)
 app.include_router(assignments_router)
 app.include_router(students_router)

@@ -19,6 +19,10 @@ from firebase_admin import auth as fb_auth
 
 STUDENT_EMAIL_DOMAIN = "students.internal"
 
+
+class EmailTaken(Exception):
+    """The email (or, for a student, the username) is already registered."""
+
 _app: firebase_admin.App | None = None
 
 
@@ -34,16 +38,21 @@ def student_email(username: str) -> str:
 
 
 def create_student_user(username: str, password: str) -> str:
-    """Creates the Identity Platform user for a new student. Returns the auth uid."""
+    """Creates the Identity Platform user for a new student. Returns the auth
+    uid. Raises EmailTaken if the username is already used: usernames are
+    unique across the whole school, whichever teacher has the student."""
     _get_app()
-    user = fb_auth.create_user(
-        email=student_email(username),
-        password=password,
-        # True because this address is synthetic and unreachable, not because
-        # anyone verified it - there's no inbox to check. Avoids the console
-        # showing a permanently "unverified" account.
-        email_verified=True,
-    )
+    try:
+        user = fb_auth.create_user(
+            email=student_email(username),
+            password=password,
+            # True because this address is synthetic and unreachable, not because
+            # anyone verified it - there's no inbox to check. Avoids the console
+            # showing a permanently "unverified" account.
+            email_verified=True,
+        )
+    except fb_auth.EmailAlreadyExistsError as exc:
+        raise EmailTaken(username) from exc
     return user.uid
 
 
@@ -73,10 +82,6 @@ def create_teacher_user(email: str, name: str) -> str:
         return fb_auth.create_user(email=email, display_name=name, email_verified=False).uid
     except fb_auth.EmailAlreadyExistsError as exc:
         raise EmailTaken(email) from exc
-
-
-class EmailTaken(Exception):
-    pass
 
 
 def password_setup_link(email: str) -> str:

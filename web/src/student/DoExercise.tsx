@@ -173,6 +173,10 @@ function AnswerForm({ exercise, onSubmitted }: { exercise: StudentExercise; onSu
   return (
     <>
       <SaveStatusLine status={answers.status} saveError={answers.saveError} />
+      <p className="notice ai-note">
+        Your teacher checks your writing with help from AI. They remove your name and personal details before anything
+        is sent to the AI.
+      </p>
       <WritingInput exercise={exercise} text={answers.value.text ?? ""} onChange={(text) => answers.change({ text })} />
       <HandwrittenPages exerciseId={exercise.exercise_id} />
       <SubmitButton question="You can't change your writing after this." onSubmit={submit} />
@@ -267,7 +271,10 @@ function HandwrittenPages({ exerciseId }: { exerciseId: string }) {
   return (
     <div className="item stack">
       <p className="instruction">Wrote it on paper? Add a photo of each page, in order.</p>
-      <p className="muted">Write only your first name on the paper. Make sure the whole page is in the photo and easy to read.</p>
+      <p className="muted">
+        Photos are sent to the AI as they are, so write only your first name on the paper. Make sure the whole page is
+        in the photo and easy to read.
+      </p>
       <div className="row">
         <label className="button">
           📷 Take a photo

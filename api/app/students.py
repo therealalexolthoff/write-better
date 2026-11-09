@@ -47,7 +47,12 @@ def create_student(
 ) -> StudentPublic:
     check_class(body.class_id, user, open_only=True)
     doc_ref = get_db().collection("students").document()
-    uid = identity.create_student_user(body.username, body.password)
+    try:
+        uid = identity.create_student_user(body.username, body.password)
+    except identity.EmailTaken as exc:
+        raise HTTPException(
+            status_code=409, detail="That username is already used at this school. Try adding a letter or a number."
+        ) from exc
     identity.set_student_claims(uid, doc_ref.id)
     doc_ref.set(
         {

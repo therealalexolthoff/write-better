@@ -124,3 +124,16 @@ def test_delete_requires_matching_username(monkeypatch, fake_db, as_teacher):
 
     # Really gone, not just marked inactive.
     assert not fake_db.collection("students").document("s1").get().exists
+
+
+def test_taken_username_is_a_clear_error(monkeypatch, fake_db, as_teacher):
+    from api.app import identity
+
+    def taken(username, password):
+        raise identity.EmailTaken(username)
+
+    monkeypatch.setattr("api.app.identity.create_student_user", taken)
+    fake_db.collection("classes").document("c1").set({"teacher_id": "teacher-1", "name": "Mon", "archived": False})
+    response = client.post("/students", json={"username": "maria.k", "password": "longenough", "class_id": "c1"}, headers=AUTH)
+    assert response.status_code == 409 and "already used" in response.json()["detail"]
+    assert fake_db.collection("students").stream() == []

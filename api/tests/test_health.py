@@ -31,3 +31,12 @@ def test_page_paths_match_the_web_router():
     paths_line = next(line for line in router.splitlines() if line.startswith("export const PATHS"))
     web_paths = set(re.findall(r'"(/[^"]*)"', paths_line))
     assert web_paths == {"/", *PAGES}
+
+
+def test_every_response_has_security_headers():
+    for path in ("/health", "/students", "/nope"):  # ok, refused, not found
+        headers = client.get(path).headers
+        assert headers["x-frame-options"] == "DENY" and headers["x-content-type-options"] == "nosniff"
+        policy = headers["content-security-policy"]
+        assert "frame-ancestors 'none'" in policy and "script-src 'self'" in policy and "unsafe-inline" not in policy.split("script-src")[1].split(";")[0]
+        assert headers["strict-transport-security"].startswith("max-age=")
