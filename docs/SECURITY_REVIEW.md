@@ -1,5 +1,7 @@
 # Security review (Phase 8, 2026-10-08)
 
+> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+
 What was checked before the pilot, how, and what's left. Re-check after any change to auth, storage, logging or prompts.
 
 ## Checked and in place

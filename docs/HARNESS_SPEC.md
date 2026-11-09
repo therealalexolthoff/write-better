@@ -1,5 +1,7 @@
 # Harness Specification (v1)
 
+> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+
 The harness is a stateless Python (FastAPI) Cloud Run service. It has **no** database or storage access, no tools, and no MCP. It exposes five operations, each a request in and validated JSON out. Callable only by the API's service account.
 
 ## 1. Operations

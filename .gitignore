@@ -7,3 +7,6 @@ node_modules/
 .env
 web/dist/
 golden/private/
+
+# Private client context; the repo is public
+CLAUDE.local.md

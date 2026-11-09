@@ -1,5 +1,7 @@
 # Architecture (v1)
 
+> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+
 ## 1. Overview
 ```
 Student phone / Teacher laptop

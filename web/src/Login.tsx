@@ -6,7 +6,7 @@ export default function Login() {
   const [mode, setMode] = useState<"student" | "teacher">("student");
   return (
     <main className="page narrow">
-      <h1>English Practice</h1>
+      <h1>Write Better</h1>
       {mode === "student" ? <StudentLogin /> : <TeacherLogin />}
       <button className="link" onClick={() => setMode(mode === "student" ? "teacher" : "student")}>
         {mode === "student" ? "Teacher sign-in" : "Student sign-in"}

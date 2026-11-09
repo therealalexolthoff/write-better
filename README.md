@@ -1,25 +1,31 @@
-# Grammar Checker
+# Write Better
 
-A web app for an ESL (English as a second language) teacher and their class. The teacher uses an AI model to draft personalized grammar exercises, writing prompts and short lessons. Students complete the work on their phones, and the AI drafts feedback on it. The teacher reviews and edits every draft before a student sees it.
+A free web app that helps adult language learners write better English. Students write, or photograph their handwriting; an AI model drafts feedback on grammar, punctuation, spelling and capitalization; and the teacher reviews and edits every draft before the student sees it.
 
 The AI drafts; the teacher decides. Nothing the AI produces reaches a student without the teacher's approval.
 
-## What it does
+> **Status: being built.** Write Better is being rebuilt from a single-teacher app. Until Phase 1 of `docs/BUILD_PLAN.md` is done, the code still contains that app's grammar exercises and lessons, and it supports only one teacher. The plan lists every phase.
 
-**For the teacher** (laptop-first)
-- Generate grammar exercises (fill in the blank, word order, short answer) and writing prompts from a plain-English description, then edit, regenerate with a note, and assign.
-- Fill-in and word-order items are graded automatically against the accepted answers.
-- Short answers and writing are evaluated by the AI against a fixed set of 14 error codes (spelling, punctuation, capitalization, verb tense, articles, prepositions and so on). The teacher can accept, edit, recode or override every mark, comment and flagged error.
+## What it will do
+
+**Public pages**
+- A home page explaining the tool, a privacy page, sign-in, and a teacher sign-up form (name, email and password). New teacher accounts do nothing until the admin approves them.
+
+**For the admin**
+- Approve or reject teacher sign-ups, manage teacher accounts, transfer a teacher's classes, and watch AI spending against a monthly cap. The admin never sees student work.
+
+**For teachers** (laptop-first)
+- Create classes and student accounts, and assign writing to a whole class or chosen students.
 - Upload photos of handwritten work. The AI transcribes it verbatim, mistakes included, and the teacher corrects the transcription side by side with the photos.
-- Generate short read-only lessons (200–400 words) aimed at a student's recurring errors.
-- See a learner profile per student, worked out from approved feedback only, and keep private notes.
-- See a class overview of every student's work, the stage it's at, and unread lessons.
+- Review AI feedback marked against a fixed set of 14 error codes (spelling, punctuation, capitalization, verb tense, articles, prepositions and so on). Accept, edit, recode or override every mark and comment, then release it.
+- See a learner profile for each student, worked out from approved feedback only, and keep private notes.
+- Each teacher sees only their own classes and students.
 
 **For students** (phone-first)
-- Answers are saved automatically and survive app switching or lost signal.
-- Word-order items use tap-to-place rather than drag-and-drop.
-- After release, students see their results with each error marked by its code. Writing gets one revision round, in which the student taps a flagged part and retypes just those words.
-- No numeric scores or percentages anywhere.
+- Write with autosave that survives app switching or lost signal, or add photos of handwritten pages.
+- See results with each error marked by its code, then revise: tap a flagged part and retype just those words.
+- See a chart of their own errors across all their returned work, with examples from their writing.
+- No numeric scores, percentages or grades anywhere.
 
 **Scope:** grammar, punctuation, spelling and capitalization only. The AI is told not to comment on style, word choice, content or organization.
 
@@ -47,7 +53,7 @@ Phone / laptop (React)
 ```
 
 - **API** (`api/`): all business logic, authorization, grading, scrubbing, the spend cap and the learner profile. It also serves the built frontend.
-- **Harness** (`harness/`): a stateless AI service with five operations: generate exercise, transcribe, evaluate exercise, evaluate writing, and generate lesson. It has no database or storage access.
+- **Harness** (`harness/`): a stateless AI service. It has five operations today: generate exercise, transcribe, evaluate exercise, evaluate writing, and generate lesson. Phase 1 cuts it to transcribe and evaluate writing. It has no database or storage access.
 - **Shared** (`shared/`): the schemas, the 14-code error taxonomy and the validation that both services use.
 - **Web** (`web/`): the React frontend. It only collects input; every rule lives in the Python API.
 
@@ -119,7 +125,7 @@ After setup:
 - `infra/deploy_firestore_rules.py` deploys the deny-all Firestore rules.
 - `infra/monitoring.sh` creates email alerts for failed AI calls, server errors and AI spend.
 
-The app is designed to stay under about $20 a month for a class of up to 30 students, AI included.
+The app is designed to stay under $20 a month in total, AI included, with a hard AI spending cap enforced in the app.
 
 ## Measuring AI accuracy
 

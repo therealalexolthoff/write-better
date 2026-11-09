@@ -44,7 +44,7 @@ School level above teachers, per-teacher budgets, co-teachers, open sign-up with
 
 ## Phases
 
-Each phase ends with the tests passing. Follow the existing habit of marking commits `NOT YET TESTED LIVE` until a feature has been tried on the real deployment.
+Each phase ends with the tests passing, CI green, and a stop for the owner's review. Follow the existing habit of marking commits `NOT YET TESTED LIVE` until a feature has been tried on the real deployment.
 
 ### Phase 0: Set up
 
@@ -52,7 +52,8 @@ Each phase ends with the tests passing. Follow the existing habit of marking com
 - Create the new Google Cloud project. Change `PROJECT_ID` and the service names in `infra/setup_gcp.sh`.
 - Request Vertex AI access to Claude right away. Approval has no fixed timeline.
 - Add a GitHub Actions workflow that runs the tests on every push. The current repo has none, and the isolation tests below only protect the app if they run automatically.
-- Rewrite `CLAUDE.md`, `README.md` and `docs/` so the one-teacher rules no longer apply. Keep the privacy rules unchanged.
+- Rewrite `CLAUDE.md` and `README.md` for Write Better, keeping the privacy rules. Mark the other docs as describing the single-teacher app.
+- Each later phase updates the docs it changes: `REQUIREMENTS.md` and `HARNESS_SPEC.md` in Phase 1, `ARCHITECTURE.md` in Phase 2, `SECURITY_REVIEW.md` in Phase 8, and `infra/README.md` when the project is set up.
 
 ### Phase 1: Make the cuts
 
@@ -118,6 +119,7 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 - Accessibility: WCAG AA contrast, large tap targets, visible keyboard focus, labelled fields, and plain-language error messages.
 
 **Public pages:**
+- **Privacy page:** a short, plain-language page linked from the home page and sign-up: who runs the tool, what goes to the AI provider, and how deletion works. Not a legal document.
 - **Home page:** what the tool does, how it works in three steps (teacher assigns, student writes or photographs their work, teacher reviews AI-drafted feedback), a plain-language privacy summary, and buttons to sign in or sign up as a teacher. Static, with no student data.
 - **Sign-in:** one page with separate student and staff options. Students use a username and password. Teachers and admin use email, password and an authenticator code. Explain what to do after a forgotten password: students ask their teacher, and teachers ask the admin.
 - **Teacher sign-up:** name, email and password, then "check your email" and "waiting for approval" pages. See Phase 4.

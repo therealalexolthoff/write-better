@@ -1,4 +1,6 @@
-# ESL Grammar & Writing Tool: Requirements (v1)
+# Requirements (v1, single-teacher app)
+
+> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
 
 Status: planning complete, ready for build. Items marked **[VERIFY]** must be confirmed by the coding agent before relying on them.
 

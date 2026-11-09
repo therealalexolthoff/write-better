@@ -35,7 +35,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <span>English Practice</span>
+        <span>Write Better</span>
         <button className="link" onClick={() => logOut()}>Sign out</button>
       </header>
       {session.role === "teacher" && <TeacherApp />}

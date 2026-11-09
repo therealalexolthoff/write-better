@@ -1,5 +1,7 @@
 # GCP project setup
 
+> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+
 One-time setup for a fresh GCP project. Run in this order.
 
 ## 1. Before running the script
