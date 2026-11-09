@@ -35,7 +35,8 @@ NO_ID_ENDPOINTS = {
     ("GET", "/students"),
     ("POST", "/students"),
     ("GET", "/exercises"),  # student_id is a query parameter
-    ("POST", "/exercises/writing-for-students"),
+    ("POST", "/assignments"),
+    ("GET", "/assignments"),
     ("GET", "/me/exercises"),
     ("GET", "/overview"),
     ("GET", "/taxonomy"),
@@ -61,7 +62,7 @@ def _endpoints():
     ]
 
 
-IDS = ("{student_id}", "{exercise_id}", "{class_id}")
+IDS = ("{student_id}", "{exercise_id}", "{class_id}", "{assignment_id}")
 
 
 def _has_id(path):
@@ -99,9 +100,10 @@ def world(monkeypatch, fake_db, harness, student, bucket):  # noqa: F811
     )
     become_teacher(monkeypatch)
     draft = {"kind": "writing", "title": "My weekend", "prompt": "Describe your weekend."}
-    exercise_id = client.post(
-        "/exercises/writing-for-students", json={"draft": draft, "student_ids": ["s1"]}, headers=AUTH
-    ).json()["exercise_ids"][0]
+    created = client.post(
+        "/assignments", json={"class_id": "c1", "draft": draft, "student_ids": ["s1"]}, headers=AUTH
+    ).json()
+    exercise_id = created["exercise_ids"][0]
     client.post(f"/exercises/{exercise_id}/photos", content=PHOTO, headers={"Content-Type": "image/jpeg", **AUTH})
     as_student(monkeypatch, student_id="s1")
     assert client.post(f"/exercises/{exercise_id}/submit", json={"answers": {"text": TYPED}}, headers=AUTH).status_code == 200
@@ -110,11 +112,11 @@ def world(monkeypatch, fake_db, harness, student, bucket):  # noqa: F811
     assert client.post(f"/exercises/{exercise_id}/evaluate", json={"note": ""}, headers=AUTH).status_code == 200
     client.post(f"/exercises/{exercise_id}/approve", headers=AUTH)
     assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).json()["state"] == "revision_open"
-    return {"student_id": "s1", "exercise_id": exercise_id, "class_id": "c1"}
+    return {"student_id": "s1", "exercise_id": exercise_id, "class_id": "c1", "assignment_id": created["assignment_id"]}
 
 
 def _url(path, world):
-    return re.sub(r"{(student_id|exercise_id|class_id)}", lambda m: world[m.group(1)], path)
+    return re.sub(r"{(student_id|exercise_id|class_id|assignment_id)}", lambda m: world[m.group(1)], path)
 
 
 def test_every_endpoint_is_covered():
@@ -152,7 +154,7 @@ def test_teacher_a_still_reaches_their_own(monkeypatch, fake_db, world):
     """The walk above only means something if these ids are right."""
     for path in ("/students/{student_id}", "/students/{student_id}/profile", "/exercises/{exercise_id}", "/exercises/{exercise_id}/photos"):
         assert client.get(_url(path, world), headers=AUTH).status_code == 200, path
-    for path in ("/students?class_id={class_id}", "/overview?class_id={class_id}"):
+    for path in ("/students?class_id={class_id}", "/overview?class_id={class_id}", "/assignments/{assignment_id}", "/assignments?class_id={class_id}"):
         assert client.get(_url(path, world), headers=AUTH).status_code == 200, path
 
 
@@ -199,16 +201,26 @@ def test_my_errors_only_shows_the_students_own(monkeypatch, fake_db, world):
 
 def test_assigning_only_reaches_the_teachers_own_students(monkeypatch, fake_db, world):
     become_teacher(monkeypatch, uid="teacher-2")
-    url = "/exercises/writing-for-students"
     draft = {"kind": "writing", "title": "Mine", "prompt": "Describe your town."}
     exercises_before = len(fake_db.collection("exercises").stream())
-    for chosen in (["s1"], ["b1", "s1"]):
-        assert client.post(url, json={"draft": draft, "student_ids": chosen}, headers=AUTH).status_code == 404
+    for body in (
+        {"class_id": "c1", "draft": draft},  # teacher A's class
+        {"class_id": "cb", "draft": draft, "student_ids": ["s1"]},  # teacher A's student
+        {"class_id": "cb", "draft": draft, "student_ids": ["b1", "s1"]},
+    ):
+        assert client.post("/assignments", json=body, headers=AUTH).status_code == 404, body
     assert len(fake_db.collection("exercises").stream()) == exercises_before  # nothing created
+    assert [a["assignment_id"] for a in client.get("/assignments", headers=AUTH).json()] == []
+    assert client.get("/assignments?class_id=c1", headers=AUTH).status_code == 404
 
-    exercise_id = client.post(url, json={"draft": draft, "student_ids": ["b1"]}, headers=AUTH).json()["exercise_ids"][0]
+    created = client.post("/assignments", json={"class_id": "cb", "draft": draft}, headers=AUTH).json()
+    exercise_id = created["exercise_ids"][0]
     assert fake_db.collection("exercises").document(exercise_id).get().get("teacher_id") == "teacher-2"
     assert fake_db.collection("submissions").document(exercise_id).get().get("teacher_id") == "teacher-2"
+    assert fake_db.collection("assignments").document(created["assignment_id"]).get().get("teacher_id") == "teacher-2"
+    # Teacher A's student can't be added to teacher B's assignment either.
+    response = client.post(f"/assignments/{created['assignment_id']}/students", json={"student_ids": ["s1"]}, headers=AUTH)
+    assert response.status_code == 404
 
 
 def test_new_students_belong_to_their_creator(monkeypatch, fake_db, world):

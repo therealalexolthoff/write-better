@@ -24,7 +24,8 @@ import ClassesPanel from "../teacher/ClassesPanel";
 import ExerciseScreen from "../teacher/ExerciseScreen";
 import ProfilePanel from "../teacher/ProfilePanel";
 import StudentsPanel from "../teacher/StudentsPanel";
-import WritingForStudents from "../teacher/WritingForStudents";
+import AssignWriting from "../teacher/AssignWriting";
+import { AssignmentList, AssignmentScreen } from "../teacher/Assignments";
 import "../styles.css";
 
 // ---- sample data ----
@@ -147,6 +148,24 @@ const API: Record<string, unknown> = {
   "GET /config": { firebase: { apiKey: "preview", authDomain: "preview.example" } },
   "GET /students": STUDENTS,
   "GET /classes": CLASSES,
+  "GET /assignments": [
+    { assignment_id: "a-weekend", class_id: "c-tue", title: "My weekend", created_at: "2026-11-03T18:00:00Z", students: 3,
+      progress: { not_started: 0, writing: 1, needs_you: 1, with_student: 0, done: 1 } },
+    { assignment_id: "a-letter", class_id: "c-tue", title: "A letter to a friend", created_at: "2026-10-27T18:00:00Z", students: 3,
+      progress: { not_started: 0, writing: 0, needs_you: 1, with_student: 1, done: 1 } },
+    { assignment_id: "a-town", class_id: "c-sat", title: "My hometown", created_at: "2026-10-25T10:00:00Z", students: 1,
+      progress: { not_started: 0, writing: 0, needs_you: 0, with_student: 0, done: 1 } },
+  ],
+  "GET /assignments/a-weekend": {
+    assignment_id: "a-weekend", class_id: "c-tue", title: "My weekend", prompt: PROMPT, min_words: 50, max_words: 150,
+    created_at: "2026-11-03T18:00:00Z", progress: { not_started: 0, writing: 1, needs_you: 1, with_student: 0, done: 1 },
+    students: [
+      { exercise_id: "ex-draft_ready", student_id: "s1", username: "maria.k", state: "draft_ready" },
+      { exercise_id: "ex-r", student_id: "s4", username: "omar.h", state: "revision_reviewed" },
+      { exercise_id: "ex-assigned", student_id: "s2", username: "tomas.r", state: "in_progress" },
+    ],
+    not_assigned: [{ student_id: "s5", username: "lina.m" }],
+  },
   "GET /me/errors": MY_ERRORS,
   "GET /taxonomy": Object.entries(MEANINGS).map(([code, description]) => ({ code, description })),
   "GET /overview": [
@@ -237,10 +256,18 @@ const SCREENS: Record<string, () => ReactNode> = {
     <Teacher><main className="page wide"><h1>maria.k</h1><ProfilePanel studentId="s1" /></main></Teacher>
   ),
   "teacher-assign": () => (
-    <Teacher><main className="page wide"><WritingForStudents students={STUDENTS.filter((s) => s.active)} onDone={noop} /></main></Teacher>
+    <Teacher><main className="page wide"><AssignWriting classes={CLASSES.filter((c) => !c.archived)} classId="c-tue" students={STUDENTS.filter((s) => s.active)} onDone={noop} /></main></Teacher>
   ),
   "teacher-students": () => (
     <Teacher><main className="page wide"><StudentsPanel students={STUDENTS} classes={CLASSES} classId="" onChange={noop} /></main></Teacher>
+  ),
+  "teacher-assignments": () => (
+    <Teacher><main className="page wide"><h1>All classes</h1><AssignmentList classId="" classes={CLASSES} onOpen={noop} /></main></Teacher>
+  ),
+  "teacher-assignment": () => (
+    <Teacher>
+      <AssignmentScreen assignmentId="a-weekend" className={(id) => CLASSES.find((c) => c.class_id === id)?.name ?? ""} onBack={noop} onOpenExercise={noop} />
+    </Teacher>
   ),
   "teacher-classes": () => <Teacher><main className="page wide"><ClassesPanel classes={CLASSES} onChange={noop} /></main></Teacher>,
   "teacher-first-run": () => (

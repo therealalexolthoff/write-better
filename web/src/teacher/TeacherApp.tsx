@@ -1,15 +1,16 @@
 // Teacher home (laptop-first): pick a class (or all of them), then see its
-// overview or one student's writing and profile & notes. Also assigns
-// writing and manages classes and student accounts.
+// overview, its assignments, or one student's writing and profile & notes.
+// Also assigns writing and manages classes and student accounts.
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { ClassInfo, ExerciseSummary, Student } from "../types";
+import AssignWriting from "./AssignWriting";
+import { AssignmentList, AssignmentScreen } from "./Assignments";
 import ClassesPanel from "./ClassesPanel";
 import ExerciseScreen, { stateLabel } from "./ExerciseScreen";
 import Overview from "./Overview";
 import ProfilePanel from "./ProfilePanel";
 import StudentsPanel from "./StudentsPanel";
-import WritingForStudents from "./WritingForStudents";
 
 type Tab = "exercises" | "profile";
 const TABS: { tab: Tab; label: string }[] = [
@@ -17,6 +18,7 @@ const TABS: { tab: Tab; label: string }[] = [
   { tab: "profile", label: "Profile & notes" },
 ];
 type Panel = "" | "writing" | "students" | "classes";
+type View = "overview" | "assignments";
 
 export default function TeacherApp() {
   const [classes, setClasses] = useState<ClassInfo[] | null>(null);
@@ -24,7 +26,9 @@ export default function TeacherApp() {
   const [classId, setClassId] = useState(""); // "" = all classes
   const [studentId, setStudentId] = useState(""); // "" = the overview
   const [tab, setTab] = useState<Tab>("exercises");
+  const [view, setView] = useState<View>("overview");
   const [openExercise, setOpenExercise] = useState<string | null>(null);
+  const [openAssignment, setOpenAssignment] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("");
   const [message, setMessage] = useState("");
   // Bumped after assigning writing or changing students, so the overview reloads.
@@ -44,6 +48,17 @@ export default function TeacherApp() {
 
   if (openExercise) return <ExerciseScreen exerciseId={openExercise} onBack={() => setOpenExercise(null)} />;
   if (classes === null) return <p className="loading">Loading…</p>;
+  const className = (id: string) => classes.find((c) => c.class_id === id)?.name ?? "";
+  if (openAssignment) {
+    return (
+      <AssignmentScreen
+        assignmentId={openAssignment}
+        className={className}
+        onBack={() => setOpenAssignment(null)}
+        onOpenExercise={setOpenExercise}
+      />
+    );
+  }
 
   const openClasses = classes.filter((c) => !c.archived);
   const archived = classes.filter((c) => c.archived);
@@ -113,19 +128,37 @@ export default function TeacherApp() {
         <StudentsPanel students={inView} classes={classes} classId={classId} onChange={reload} />
       )}
       {panel === "writing" && (
-        <WritingForStudents
-          students={active}
-          onDone={(done) => {
+        <AssignWriting
+          classes={openClasses}
+          classId={classId}
+          students={students.filter((s) => s.active)}
+          onDone={(done, assignmentId) => {
             setPanel("");
             setMessage(done);
+            setView("assignments");
             setOverviewKey((k) => k + 1);
+            setOpenAssignment(assignmentId);
           }}
         />
       )}
       {message && <p className="notice">{message}</p>}
 
       {!student ? (
-        <Overview key={`${classId}-${overviewKey}`} classId={classId} onOpenExercise={setOpenExercise} onOpenStudent={setStudentId} />
+        <>
+          <div className="tabs" role="tablist">
+            <button role="tab" aria-selected={view === "overview"} className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}>
+              Students
+            </button>
+            <button role="tab" aria-selected={view === "assignments"} className={view === "assignments" ? "active" : ""} onClick={() => setView("assignments")}>
+              Assignments
+            </button>
+          </div>
+          {view === "overview" ? (
+            <Overview key={`${classId}-${overviewKey}`} classId={classId} onOpenExercise={setOpenExercise} onOpenStudent={setStudentId} />
+          ) : (
+            <AssignmentList key={`${classId}-${overviewKey}`} classId={classId} classes={classes} onOpen={setOpenAssignment} />
+          )}
+        </>
       ) : (
         <>
           <div className="tabs" role="tablist">

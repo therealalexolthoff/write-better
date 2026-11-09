@@ -1,7 +1,7 @@
 """Writing exercises, end to end.
 
-Teacher: write an exercise and assign it to one or more of their own
-students, list a student's exercises, release results, reopen a submission.
+Teacher: list a student's exercises, release results, reopen a submission.
+(Exercises are created by assigning writing: assignments.py.)
 Student: list assigned work, open it, autosave the response, submit.
 Who may reach which exercise is checked in access.py, before each route
 runs; every exercise and submission records its teacher as teacher_id.
@@ -38,7 +38,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 from shared.taxonomy import CODE_DESCRIPTIONS, ErrorCode
 
-from .access import exercise_for_caller, owned_exercise, owned_student, students_exercise, teacher_owns
+from .access import exercise_for_caller, owned_exercise, owned_student, students_exercise
 from .audit import record as record_audit
 from .auth import CurrentUser, get_current_user, require_student, require_teacher
 from .firestore_client import get_db
@@ -49,7 +49,6 @@ from .models import (
     SpanView,
     StudentExerciseSummary,
     StudentExerciseView,
-    WritingForStudentsBody,
 )
 from .revision import revision_view
 
@@ -246,42 +245,6 @@ def taxonomy(user: CurrentUser = Depends(require_teacher)) -> list[dict]:
     """The 14 codes for the evaluation editor's code picker, served from
     the one shared list rather than copied into the frontend."""
     return [{"code": code.value, "description": desc} for code, desc in CODE_DESCRIPTIONS.items()]
-
-
-@router.post("/exercises/writing-for-students")
-def assign_writing_to_students(body: WritingForStudentsBody, user: CurrentUser = Depends(require_teacher)) -> dict:
-    """A writing exercise the teacher wrote, assigned straight away to each
-    chosen student. Each student gets their own copy. Either every copy is
-    created or none is. Every chosen student must be the teacher's own:
-    another teacher's student looks the same as one that doesn't exist."""
-    draft = body.draft
-    if not draft.title.strip() or not draft.prompt.strip():
-        raise HTTPException(status_code=422, detail="Give the exercise a title and a prompt.")
-    student_ids = list(dict.fromkeys(body.student_ids))  # each student once, in the order picked
-    for student_id in student_ids:
-        student = get_db().collection("students").document(student_id).get().to_dict()
-        if not teacher_owns(student, user) or not student.get("active"):
-            raise HTTPException(status_code=404, detail="A chosen student was not found or is inactive.")
-
-    count = len(student_ids)
-    batch = get_db().batch()
-    exercise_ids = []
-    for student_id in student_ids:
-        ref = get_db().collection("exercises").document()
-        exercise = {
-            "student_id": student_id,
-            "teacher_id": user.uid,
-            "status": "assigned",
-            **draft.model_dump(mode="json"),  # kind, title, prompt, word limits
-            "teacher_request": f"Written by you, for {count} student{'s' if count > 1 else ''}.",
-            "created_at": _now(),
-            "assigned_at": _now(),
-        }
-        batch.set(ref, exercise)
-        batch.set(_submission_ref(ref.id), _new_submission(ref.id, student_id, user.uid))
-        exercise_ids.append(ref.id)
-    batch.commit()
-    return {"exercise_ids": exercise_ids}
 
 
 @router.get("/exercises", dependencies=[Depends(owned_student)])

@@ -1,7 +1,8 @@
 """Which records a caller may reach (CLAUDE.md: teachers are kept separate).
 
 Every record that belongs to a teacher carries their account uid as
-"teacher_id": classes, students, exercises, submissions and AI job records. A
+"teacher_id": classes, assignments, students, exercises, submissions and AI
+job records. A
 teacher only ever reaches records with their own teacher_id; a student
 only their own exercises; the admin no student records at all.
 
@@ -28,6 +29,10 @@ def _exercise(exercise_id: str) -> dict | None:
 
 def _class(class_id: str) -> dict | None:
     return get_db().collection("classes").document(class_id).get().to_dict()
+
+
+def _assignment(assignment_id: str) -> dict | None:
+    return get_db().collection("assignments").document(assignment_id).get().to_dict()
 
 
 def teacher_owns(record: dict | None, user: CurrentUser) -> bool:
@@ -67,6 +72,12 @@ def owned_exercise(exercise_id: str, user: CurrentUser = Depends(require_teacher
     """The exercise belongs to the calling teacher."""
     if not teacher_owns(_exercise(exercise_id), user):
         raise _exercise_not_found()
+
+
+def owned_assignment(assignment_id: str, user: CurrentUser = Depends(require_teacher)) -> None:
+    """The assignment belongs to the calling teacher."""
+    if not teacher_owns(_assignment(assignment_id), user):
+        raise HTTPException(status_code=404, detail="assignment not found")
 
 
 def owned_class(class_id: str, user: CurrentUser = Depends(require_teacher)) -> None:

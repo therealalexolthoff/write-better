@@ -232,6 +232,9 @@ tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: var(--brand-tint); }
 td.actions { text-align: right; }
 td.actions > button, td.actions > select { margin: 0.2rem 0 0.2rem 0.4rem; }
+.choose-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0 1rem; padding-left: 2rem; }
+select.block-select { display: block; margin-top: 0.35rem; min-height: 2.9rem; }
+.chips { gap: 0.4rem; }
 select.small-select { min-height: 2.5rem; padding: 0.3rem 0.6rem; font-size: 0.95rem; margin-top: 0; vertical-align: middle; }
 .pickers { margin-bottom: 0.5rem; }
 table.middle td:first-child { white-space: nowrap; }

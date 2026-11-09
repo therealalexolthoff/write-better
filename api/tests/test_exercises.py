@@ -50,9 +50,10 @@ def student(fake_db):
 
 
 def _assign(student_id="s1", draft=WRITING):
-    """A writing exercise assigned to one student, as the teacher."""
+    """A writing assignment in class c1 for one student, as the teacher.
+    Returns the student's exercise (their copy)."""
     response = client.post(
-        "/exercises/writing-for-students", json={"draft": draft, "student_ids": [student_id]}, headers=AUTH
+        "/assignments", json={"class_id": "c1", "draft": draft, "student_ids": [student_id]}, headers=AUTH
     )
     assert response.status_code == 200, response.text
     return response.json()["exercise_ids"][0]
@@ -180,11 +181,12 @@ def test_cut_features_are_gone(fake_db, as_teacher, harness, student):
         ("POST", "/exercises/generate"),
         ("POST", "/exercises/x/regenerate"),
         ("POST", "/exercises/x/assign"),
+        ("POST", "/exercises/writing-for-students"),
         ("POST", "/lessons/generate"),
         ("GET", "/me/lessons"),
     ):
         assert client.request(method, path, json={}, headers=AUTH).status_code in (404, 405), path
     grammar = {"kind": "grammar", "title": "x", "items": [{"id": "i1", "type": "short_answer", "prompt": "Why?"}]}
-    response = client.post("/exercises/writing-for-students", json={"draft": grammar, "student_ids": ["s1"]}, headers=AUTH)
+    response = client.post("/assignments", json={"class_id": "c1", "draft": grammar, "student_ids": ["s1"]}, headers=AUTH)
     assert response.status_code == 422
     assert harness.calls == []

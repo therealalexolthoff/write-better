@@ -1,6 +1,6 @@
 # Architecture (v1)
 
-> **Status:** updated in Phase 5 (2026-11-09): admin, teacher and student roles, teacher ownership on every record, teacher sign-up and the admin's account management, classes, and the student's error view. Assignments are added to the data model in Phase 6 (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+> **Status:** updated in Phase 6 (2026-11-09): admin, teacher and student roles, teacher ownership on every record, teacher sign-up and the admin's account management, classes, the student's error view, and class writing assignments (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
 
 ## 1. Overview
 ```
@@ -39,7 +39,8 @@ All business logic and authorization live in the API. The harness has **no** dat
 |---|---|
 | `classes` | id, **teacher_id**, name, archived, created_at (`api/app/classes.py`). |
 | `students` | id (opaque), username, auth uid, **teacher_id**, class_id, active, teacher_notes, created_at. The profile is not stored; it is computed on demand from approved submissions (`api/app/profile.py`), so it can never drift from its data. teacher_notes is one private free-text field, never sent to the harness. |
-| `exercises` | id (same as its submission), student_id, **teacher_id**, kind (`writing`), status (always `assigned`), title, prompt, min/max words, teacher_request, created_at, assigned_at |
+| `assignments` | id, **teacher_id**, class_id, kind (`writing`), title, prompt, min/max words, created_at (`api/app/assignments.py`). One per piece of writing set for a class; each student's copy is an exercise. |
+| `exercises` | id (same as its submission), student_id, **teacher_id**, class_id, assignment_id, kind (`writing`), status (always `assigned`), title, prompt, min/max words, teacher_request, created_at, assigned_at. One student's copy of an assignment. |
 | `submissions` | id, exercise_id, student_id, **teacher_id**, state, answers (`{"text": ...}`, the original), scrubbed_answers, final_source (`typed`/`photo`), transcription, photos[] (path, uploaded_at, uploaded_by `teacher`/`student`), evaluation and evaluation_ai (annotations with computed offsets, comment), evaluation_valid, release_at, revision {edits, submitted_at, outcomes} |
 | `jobs` | id, operation, student_id, **teacher_id**, prompt_version, model, status, latency, tokens_in/out/cached, cost, validation_outcome (`passed`/`rejected`), teacher_action (`accepted`/`edited`/`regenerated`), error |
 | `teachers` | id (= auth uid), name, email, active, source (`signup`/`admin`), created_at. Written by the admin's routes (`api/app/admin.py`). |

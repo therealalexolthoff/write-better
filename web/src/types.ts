@@ -53,6 +53,29 @@ export type ExerciseSummary = { exercise_id: string; title: string; status?: str
 export type Student = { student_id: string; username: string; active: boolean; class_id: string | null };
 export type ClassInfo = { class_id: string; name: string; archived: boolean; student_count: number };
 
+// Writing assignments (api/app/assignments.py).
+export type Progress = { not_started: number; writing: number; needs_you: number; with_student: number; done: number };
+export type AssignmentSummary = {
+  assignment_id: string;
+  class_id: string;
+  title: string;
+  created_at: string;
+  students: number;
+  progress: Progress;
+};
+export type AssignmentDetail = {
+  assignment_id: string;
+  class_id: string;
+  title: string;
+  prompt: string;
+  min_words: number | null;
+  max_words: number | null;
+  created_at: string;
+  progress: Progress;
+  students: { exercise_id: string; student_id: string; username: string; state: string }[];
+  not_assigned: { student_id: string; username: string }[];
+};
+
 // The student's own error view (api/app/progress.py).
 export type ErrorExample = { title: string; text: string; start: number; end: number; cut_start: boolean; cut_end: boolean };
 export type MyErrors = {

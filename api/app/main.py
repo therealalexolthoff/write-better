@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from shared.logs import catch_unexpected_errors
 
 from .admin import router as admin_router
+from .assignments import router as assignments_router
 from .classes import router as classes_router
 from .config import settings
 from .exercises import router as exercises_router
@@ -27,6 +28,7 @@ from .writing import router as writing_router
 app = FastAPI(title="Write Better API")
 catch_unexpected_errors(app)  # no tracebacks in the logs: they can quote student text
 app.include_router(classes_router)
+app.include_router(assignments_router)
 app.include_router(students_router)
 app.include_router(exercises_router)
 app.include_router(review_router)

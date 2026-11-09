@@ -4,9 +4,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from shared.schemas import WritingExerciseDraft
-
-
 class StudentCreateRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=8)
@@ -45,14 +42,6 @@ AnswerText = Annotated[str, Field(max_length=_MAX_ANSWER)]
 # The student's response, its scrubbed copy and so on are all stored under
 # this one key: {"text": ...}.
 WRITING_KEY = "text"
-
-
-class WritingForStudentsBody(BaseModel):
-    """A writing exercise the teacher wrote, to assign to one or more
-    students at once."""
-
-    draft: WritingExerciseDraft
-    student_ids: list[str] = Field(min_length=1, max_length=100)
 
 
 class AnswersBody(BaseModel):

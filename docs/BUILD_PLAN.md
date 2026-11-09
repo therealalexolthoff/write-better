@@ -180,6 +180,8 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 - A new `assignments` record links the copies, so a teacher can assign to a whole class or chosen students and see everyone's progress in one place.
 - A student who joins a class later can be added to an existing assignment.
 
+**Status (2026-11-09):** built: `api/app/assignments.py` (create for a whole class or chosen students, list with progress counts, one assignment's view, add students), replacing `POST /exercises/writing-for-students`; admin transfers move assignments too. Screens: "Assign writing" (class, whole class or chosen students), an Assignments tab and one view per assignment.
+
 ### Phase 7: Spending
 
 - Change `spend.py` to an atomic increment. The current read-then-write relies on there being only one teacher.
