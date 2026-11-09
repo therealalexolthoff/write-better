@@ -53,6 +53,21 @@ export type ExerciseSummary = { exercise_id: string; title: string; status?: str
 export type Student = { student_id: string; username: string; active: boolean; class_id: string | null };
 export type ClassInfo = { class_id: string; name: string; archived: boolean; student_count: number };
 
+// The admin's spending screen (api/app/admin.py).
+export type CallCount = { calls: number; cost_usd: number };
+export type Spending = {
+  month: string;
+  total_usd: number;
+  cap_usd: number;
+  max_cap_usd: number;
+  paused: boolean;
+  calls: number;
+  failed_calls: number;
+  by_operation: ({ operation: string } & CallCount)[];
+  by_teacher: ({ uid: string; name: string } & CallCount)[];
+  months: { month: string; total_usd: number; calls: number }[];
+};
+
 // Writing assignments (api/app/assignments.py).
 export type Progress = { not_started: number; writing: number; needs_you: number; with_student: number; done: number };
 export type AssignmentSummary = {

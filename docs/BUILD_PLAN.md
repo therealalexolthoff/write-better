@@ -189,6 +189,8 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 - Send spending alerts to the admin, and add Google billing alerts at $10 and $15.
 - When the cap is reached, teachers see a clear message that AI feedback is paused. They can still read and edit existing work.
 
+**Status (2026-11-09):** built: atomic spend (`api/app/spend.py`), the admin's Spending tab and cap setting (`GET /admin/spending`, `PUT /admin/spending/cap`, capped at $20, default $15), `GET /ai-status` and the teacher's "paused" notice. The 75% alert already goes to the admin through `infra/monitoring.sh`, and the Google budget (alerts at $10, $15 and $20) was set up in Phase 0.
+
 ### Phase 8: Check and launch
 
 - Redo `docs/SECURITY_REVIEW.md` for the new roles and the public sign-up route.

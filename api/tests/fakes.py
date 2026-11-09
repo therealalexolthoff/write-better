@@ -6,13 +6,15 @@ available in every dev environment. This fake lets the auth/ownership
 logic be tested everywhere without that. Swap to emulator-backed tests if
 the code ever needs a Firestore query feature this fake doesn't implement
 (it supports get/set/update/delete/stream/add, batch set, where() with "==" filters
-only, and update() with a last_update_time precondition). Like real
+only, update() with a last_update_time precondition, set(..., merge=True), and
+the Increment transform). Like real
 Firestore, it refuses a list directly inside a list.
 """
 
 import itertools
 
 from google.api_core.exceptions import FailedPrecondition, InvalidArgument
+from google.cloud.firestore_v1.transforms import Increment
 
 # Stands in for Firestore's per-document update timestamps: every write
 # takes the next number, which is all a last_update_time check needs.
@@ -31,6 +33,15 @@ def _refuse_nested_lists(value, inside_list=False):
     elif isinstance(value, dict):
         for element in value.values():
             _refuse_nested_lists(element)
+
+
+def _apply(existing: dict, data: dict) -> dict:
+    """data written over existing, with Increment adding to the old number
+    (or to 0), as Firestore does."""
+    result = dict(existing)
+    for key, value in data.items():
+        result[key] = (existing.get(key) or 0) + value.value if isinstance(value, Increment) else value
+    return result
 
 
 class FakeWriteOption:
@@ -64,16 +75,18 @@ class FakeDocRef:
     def _times(self):
         return self._store.setdefault(("update_times", self._collection_name), {})
 
-    def set(self, data):
+    def set(self, data, merge=False):
         _refuse_nested_lists(data)
-        self._store[self._collection_name][self.id] = dict(data)
+        existing = self._store[self._collection_name].get(self.id, {}) if merge else {}
+        self._store[self._collection_name][self.id] = _apply(existing, data)
         self._times()[self.id] = next(_clock)
 
     def update(self, data, option=None):
         if option is not None and option.last_update_time != self._times().get(self.id):
             raise FailedPrecondition("document changed since it was read")
         _refuse_nested_lists(data)
-        self._store[self._collection_name][self.id].update(data)
+        stored = self._store[self._collection_name]
+        stored[self.id] = _apply(stored[self.id], data)
         self._times()[self.id] = next(_clock)
 
     def get(self):

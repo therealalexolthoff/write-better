@@ -7,6 +7,7 @@ per prompt version/operation - docs/ARCHITECTURE.md sections 4 and 8.
 from datetime import datetime, timezone
 
 from .firestore_client import get_db
+from .spend import month_key
 
 
 def create_job(operation: str, student_id: str, teacher_id: str, prompt_version: str) -> str:
@@ -16,6 +17,7 @@ def create_job(operation: str, student_id: str, teacher_id: str, prompt_version:
             "operation": operation,
             "student_id": student_id,
             "teacher_id": teacher_id,
+            "month": month_key(),  # for the admin's monthly breakdown
             "prompt_version": prompt_version,
             "status": "running",
             "created_at": datetime.now(timezone.utc),

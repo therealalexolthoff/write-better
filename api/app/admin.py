@@ -9,7 +9,11 @@ role; reject deletes the login and the request. Requests left pending
 longer than SIGNUP_EXPIRY are deleted the next time the admin lists them.
 
 Teachers: Firestore teachers/{auth uid}: name, email, active, source
-("signup" or "admin"), created_at. The admin can also create a teacher
+("signup" or "admin"), created_at.
+
+Spending: this month's AI spend against the cap, broken down by operation
+and by teacher (from the job records: counts and dollars, nothing about
+students), the last few months, and setting the cap (at most $20). The admin can also create a teacher
 directly (with a one-time link to set their password), deactivate and
 reactivate one, send a new password link, clear a lost authenticator app,
 and transfer all of one teacher's students and their work to another.
@@ -21,10 +25,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import BaseModel, Field
 
-from . import identity
+from . import identity, spend
 from .audit import record as record_audit
 from .auth import CurrentUser, require_admin
 from .firestore_client import get_db
+from .harness_ops import ai_paused
+from .settings import MAX_CAP_USD, get_settings, set_monthly_cap
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -45,6 +51,10 @@ class NewTeacherBody(BaseModel):
 
 class TransferBody(BaseModel):
     to_teacher_id: str
+
+
+class CapBody(BaseModel):
+    monthly_cap_usd: float = Field(ge=0, le=MAX_CAP_USD)
 
 
 def _now() -> datetime:
@@ -211,3 +221,48 @@ def transfer_students(uid: str, body: TransferBody, user: CurrentUser = Depends(
         moved[collection] = len(docs)
     record_audit(user.uid, "transfer_students", target=f"{uid}->{body.to_teacher_id}")
     return {"moved": moved}
+
+
+# ---- spending ----
+
+
+@router.get("/spending")
+def spending(user: CurrentUser = Depends(require_admin)) -> dict:
+    """This month's AI spend and calls, by operation and by teacher."""
+    month = spend.month_key()
+    jobs = [doc.to_dict() for doc in get_db().collection("jobs").where(filter=FieldFilter("month", "==", month)).stream()]
+    names = {doc.id: doc.get("name") for doc in get_db().collection("teachers").stream()}
+
+    by_operation: dict[str, dict] = {}
+    by_teacher: dict[str, dict] = {}
+    for job in jobs:
+        cost = job.get("cost_usd") or 0.0
+        for key, table in ((job["operation"], by_operation), (job.get("teacher_id") or "", by_teacher)):
+            row = table.setdefault(key, {"calls": 0, "cost_usd": 0.0})
+            row["calls"] += 1
+            row["cost_usd"] += cost
+    settings = get_settings()
+    return {
+        "month": month,
+        "total_usd": spend.current_month_spend(),
+        "cap_usd": settings.monthly_cap_usd,
+        "max_cap_usd": MAX_CAP_USD,
+        "paused": ai_paused(),
+        "calls": len(jobs),
+        "failed_calls": sum(1 for job in jobs if job.get("status") == "error"),
+        "by_operation": [{"operation": op, **row} for op, row in sorted(by_operation.items())],
+        "by_teacher": sorted(
+            ({"uid": uid, "name": names.get(uid, "(no longer a teacher)"), **row} for uid, row in by_teacher.items()),
+            key=lambda row: row["cost_usd"],
+            reverse=True,
+        ),
+        "months": spend.recent_months(),
+    }
+
+
+@router.put("/spending/cap")
+def set_cap(body: CapBody, user: CurrentUser = Depends(require_admin)) -> dict:
+    """The monthly AI cap. 0 pauses AI feedback entirely."""
+    set_monthly_cap(body.monthly_cap_usd)
+    record_audit(user.uid, "set_spend_cap", target=f"{body.monthly_cap_usd:.2f}")
+    return {"cap_usd": body.monthly_cap_usd}

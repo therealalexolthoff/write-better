@@ -445,6 +445,26 @@ mark.span { background: var(--mark); border-bottom: 2px solid var(--mark-line); 
 .link-box input { margin-top: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9rem; }
 @media (max-width: 40rem) { .nav-wide { display: none; } }
 
+/* ---- admin spending: stat, meter, status (status colours always with a label) ---- */
+
+.stat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 1rem; margin: 0.25rem 0 1rem; }
+.stat-value { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+.stat-label { color: var(--charcoal); }
+.meter { height: 12px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--brand); border-radius: 999px; min-width: 4px; }
+.meter.warning .meter-fill { background: var(--warn); }
+.meter.critical .meter-fill { background: var(--danger); }
+.status-line { display: flex; align-items: center; gap: 0.5rem; margin: 0.75rem 0 0; font-weight: 600; }
+.status-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; color: #fff; font-size: 0.8rem; background: var(--success); }
+.status-line.ok { color: var(--success); }
+.status-line.warning { color: var(--warn); }
+.status-line.warning .status-icon { background: var(--warn); }
+.status-line.critical { color: var(--danger); }
+.status-line.critical .status-icon { background: var(--danger); }
+.wide-number { width: 8rem; }
+.split-tables { display: grid; gap: 0 2rem; margin-top: 1.5rem; }
+@media (min-width: 48rem) { .split-tables { grid-template-columns: 1fr 1fr; } }
+
 /* ---- the signed-in app ---- */
 
 .app { min-height: 100vh; }

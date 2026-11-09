@@ -43,6 +43,7 @@ NO_ID_ENDPOINTS = {
     ("GET", "/classes"),
     ("POST", "/classes"),
     ("GET", "/me/errors"),
+    ("GET", "/ai-status"),  # no student data: just whether AI is paused
 }
 # The sign-up routes: the only ones a role-less account reaches, and they
 # only ever touch the caller's own request (api/tests/test_signup.py).

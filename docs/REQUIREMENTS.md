@@ -75,7 +75,7 @@ In scope: grammar and punctuation errors in students' writing, including spellin
 - FR-32. One screen listing each student with pending work and pipeline stage (assigned, in progress, submitted, awaiting transcription review, awaiting scrub, evaluating, draft ready, ready to release, released, revision open, revision submitted, revision checked).
 
 ### 4.10 Operations
-- FR-33. The app logs each harness call's tokens and cost, shows monthly spend, and enforces a hard monthly cap in the app (estimate before call, record after). At the cap, evaluation and transcription pause with a clear message. Cap is a setting.
+- FR-33. The app logs each harness call's tokens and cost and enforces a hard monthly AI cap in the app (estimate before call, record after, added atomically so several teachers' calls count correctly). The cap defaults to $15 and the admin can set it from $0 (AI off) to $20, never higher. The admin's Spending screen shows this month's spend against the cap, calls and cost by task and by teacher, failed calls, and recent months. Passing 75% of the cap emails the admin. At the cap, evaluation and transcription pause: teachers see a plain notice on the review screen (no amounts) and can still read and edit everything.
 - FR-34. Harness failures or timeouts leave the job in a retryable error state; no work is lost.
 - FR-35. Student-facing UI is English only, plain language, large text, no jargon in errors.
 - FR-36. No in-app AI-use notice is required; the teacher informs students in class that their work is processed by an AI provider.

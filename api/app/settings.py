@@ -12,8 +12,14 @@ from pydantic import BaseModel
 from .firestore_client import get_db
 
 
+# The whole project must stay under $20 a month (CLAUDE.md), hosting
+# included, so the AI cap can never be set above this.
+MAX_CAP_USD = 20.0
+
+
 class Settings(BaseModel):
-    monthly_cap_usd: float = 20.0
+    # Leaves room under $20 for everything else (docs/BUILD_PLAN.md).
+    monthly_cap_usd: float = 15.0
     # A conservative fixed estimate used for the pre-call cap check, until
     # real per-operation token budgets exist (see module docstring).
     estimated_cost_per_call_usd: float = 0.05
@@ -27,3 +33,7 @@ def get_settings() -> Settings:
     if not doc.exists:
         return Settings()
     return Settings(**doc.to_dict())
+
+
+def set_monthly_cap(cap_usd: float) -> None:
+    get_db().collection("settings").document("global").set({"monthly_cap_usd": cap_usd}, merge=True)

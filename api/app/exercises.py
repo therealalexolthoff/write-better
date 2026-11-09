@@ -42,7 +42,7 @@ from .access import exercise_for_caller, owned_exercise, owned_student, students
 from .audit import record as record_audit
 from .auth import CurrentUser, get_current_user, require_student, require_teacher
 from .firestore_client import get_db
-from .harness_ops import HarnessValidationFailed, SpendCapReached, call_harness
+from .harness_ops import HarnessValidationFailed, SpendCapReached, ai_paused, call_harness
 from .models import (
     WRITING_KEY,
     AnswersBody,
@@ -53,6 +53,11 @@ from .models import (
 from .revision import revision_view
 
 router = APIRouter(tags=["exercises"])
+
+AI_PAUSED_MESSAGE = (
+    "AI feedback is paused. This month's AI budget has been used. Nothing was lost, and you can still read and "
+    "edit your students' work. It starts again next month, or ask the Write Better administrator."
+)
 
 # States in which the student may still change their response.
 OPEN_STATES = ("assigned", "in_progress")
@@ -136,7 +141,7 @@ def call_ai(operation: str, req, teacher_id: str) -> tuple[object, str]:
     try:
         return call_harness(operation, req, teacher_id)
     except SpendCapReached as exc:
-        raise HTTPException(status_code=409, detail=f"{exc}. AI evaluation and transcription are paused.") from exc
+        raise HTTPException(status_code=409, detail=AI_PAUSED_MESSAGE) from exc
     except HarnessValidationFailed as exc:
         raise HTTPException(
             status_code=502, detail="The AI result could not be used. Nothing was changed - please try again."
@@ -238,6 +243,15 @@ def _new_submission(exercise_id: str, student_id: str, teacher_id: str) -> dict:
 
 
 # ---- teacher ----
+
+
+@router.get("/ai-status")
+def ai_status(user: CurrentUser = Depends(require_teacher)) -> dict:
+    """Whether AI feedback is paused by the monthly cap, so the review
+    screen can say so before the teacher tries. No amounts: those are the
+    admin's (admin.py)."""
+    paused = ai_paused()
+    return {"paused": paused, "message": AI_PAUSED_MESSAGE if paused else ""}
 
 
 @router.get("/taxonomy")

@@ -47,5 +47,5 @@ def test_crossing_75_percent_of_the_cap_is_logged_once(fake_db, capsys):
 
 def test_settings_defaults_when_doc_missing(fake_db):
     s = get_settings()
-    assert s.monthly_cap_usd == 20.0
+    assert s.monthly_cap_usd == 15.0
     assert s.estimated_cost_per_call_usd == 0.05

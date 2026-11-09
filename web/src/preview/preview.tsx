@@ -148,6 +148,21 @@ const API: Record<string, unknown> = {
   "GET /config": { firebase: { apiKey: "preview", authDomain: "preview.example" } },
   "GET /students": STUDENTS,
   "GET /classes": CLASSES,
+  "GET /admin/spending": {
+    month: "2026-11", total_usd: 11.84, cap_usd: 15, max_cap_usd: 20, paused: false, calls: 312, failed_calls: 3,
+    by_operation: [
+      { operation: "evaluate_writing", calls: 268, cost_usd: 8.95 },
+      { operation: "transcribe", calls: 44, cost_usd: 2.89 },
+    ],
+    by_teacher: [
+      { uid: "t-ana", name: "Ana Lee", calls: 190, cost_usd: 7.21 },
+      { uid: "t-sam", name: "Sam Patel", calls: 122, cost_usd: 4.63 },
+    ],
+    months: [
+      { month: "2026-11", total_usd: 11.84, calls: 312 },
+      { month: "2026-10", total_usd: 9.12, calls: 241 },
+    ],
+  },
   "GET /assignments": [
     { assignment_id: "a-weekend", class_id: "c-tue", title: "My weekend", created_at: "2026-11-03T18:00:00Z", students: 3,
       progress: { not_started: 0, writing: 1, needs_you: 1, with_student: 0, done: 1 } },
@@ -214,6 +229,10 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input), window.location.origin);
   const key = `${init?.method ?? "GET"} ${url.pathname}`;
   if (key.endsWith("/photos")) return Response.json([]);
+  if (key === "GET /ai-status") {
+    const paused = new URLSearchParams(window.location.search).get("screen") === "teacher-review-paused";
+    return Response.json({ paused, message: paused ? "AI feedback is paused. This month's AI budget has been used. Nothing was lost, and you can still read and edit your students' work. It starts again next month, or ask the Write Better administrator." : "" });
+  }
   if (!(key in API)) return Response.json({ status: "ok" });
   return Response.json(API[key]);
 };
@@ -297,6 +316,8 @@ const SCREENS: Record<string, () => ReactNode> = {
     <div className="app"><AppHeader role="student" onSignOut={noop} /><DoExercise exerciseId="ex-revision_reviewed" onBack={noop} /></div>
   ),
   "admin-signups": () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><AdminApp /></div>,
+  "admin-spending": () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><AdminApp initialTab="spending" /></div>,
+  "teacher-review-paused": () => <Teacher><ExerciseScreen exerciseId="ex-draft_ready" onBack={noop} /></Teacher>,
   "admin-teachers": () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><AdminApp initialTab="teachers" /></div>,
 };
 

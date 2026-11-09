@@ -42,10 +42,10 @@ All business logic and authorization live in the API. The harness has **no** dat
 | `assignments` | id, **teacher_id**, class_id, kind (`writing`), title, prompt, min/max words, created_at (`api/app/assignments.py`). One per piece of writing set for a class; each student's copy is an exercise. |
 | `exercises` | id (same as its submission), student_id, **teacher_id**, class_id, assignment_id, kind (`writing`), status (always `assigned`), title, prompt, min/max words, teacher_request, created_at, assigned_at. One student's copy of an assignment. |
 | `submissions` | id, exercise_id, student_id, **teacher_id**, state, answers (`{"text": ...}`, the original), scrubbed_answers, final_source (`typed`/`photo`), transcription, photos[] (path, uploaded_at, uploaded_by `teacher`/`student`), evaluation and evaluation_ai (annotations with computed offsets, comment), evaluation_valid, release_at, revision {edits, submitted_at, outcomes} |
-| `jobs` | id, operation, student_id, **teacher_id**, prompt_version, model, status, latency, tokens_in/out/cached, cost, validation_outcome (`passed`/`rejected`), teacher_action (`accepted`/`edited`/`regenerated`), error |
+| `jobs` | id, operation, student_id, **teacher_id**, month (`YYYY-MM`, for the admin's breakdown), prompt_version, model, status, latency, tokens_in/out/cached, cost, validation_outcome (`passed`/`rejected`), teacher_action (`accepted`/`edited`/`regenerated`), error |
 | `teachers` | id (= auth uid), name, email, active, source (`signup`/`admin`), created_at. Written by the admin's routes (`api/app/admin.py`). |
 | `signup_requests` | id (= auth uid), name, email (from the signed-in token), status (`pending`), created_at, day (for the daily limit). Deleted when the admin approves or rejects it, or after 30 days. |
-| `spend` | month key, totals |
+| `spend` | id = month (`YYYY-MM`): total_usd and calls, both added with Firestore's atomic Increment (`api/app/spend.py`) |
 | `settings` | single doc: monthly_cap, per-operation model names, alert thresholds, profile_window (default 5), token budgets |
 | `audit` | actor, action, target, timestamp |
 
@@ -75,7 +75,7 @@ ready_to_release -> revision_open -> revision_submitted -> revision_reviewed
 Removed in Phase 1: it fed exercise and lesson generation, which no longer exist.
 
 ## 8. Cost control and observability
-- Per call: estimate cost before, enforce cap, record actual after. Show monthly spend to the admin (Phase 7).
+- Per call: estimate cost before, enforce cap, record actual after (atomic increment). The admin's Spending screen shows the month's spend, by task and by teacher, and sets the cap (default $15, at most $20). Accepted imprecision: calls already running when the cap is reached can take the month a few cents over, and the 75% alert can fire twice if two calls cross it together.
 - Job records capture operation, prompt version, model, latency, retries, tokens, cost, validation outcome, and teacher action (accepted/edited/regenerated). Edit rate per operation and prompt version is the main quality signal.
 - Structured JSON logs to Cloud Logging with IDs and counts only (never student text/images). Cloud Monitoring alerts: harness error rate, spend thresholds. Billing alerts at $10/$15.
 - No third-party LLM tracing tools (they would receive student text).

@@ -47,6 +47,12 @@ def _validate_semantics(operation: str, req, result) -> None:
         check_page_numbers([p.page for p in result.pages], len(req.pages))
 
 
+def ai_paused() -> bool:
+    """True when another AI call would take this month over the cap."""
+    settings = get_settings()
+    return spend.current_month_spend() + settings.estimated_cost_per_call_usd > settings.monthly_cap_usd
+
+
 def call_harness(operation: str, req, teacher_id: str) -> tuple[object, str]:
     """Calls one harness operation end to end. Returns the validated
     operation-specific result (not the response envelope) and the job id,
@@ -58,7 +64,7 @@ def call_harness(operation: str, req, teacher_id: str) -> tuple[object, str]:
     _, response_cls = _OPERATIONS[operation]
 
     settings = get_settings()
-    if spend.current_month_spend() + settings.estimated_cost_per_call_usd > settings.monthly_cap_usd:
+    if ai_paused():
         log_event("spend_cap_reached", "WARNING", operation=operation, cap_usd=settings.monthly_cap_usd)
         raise SpendCapReached(f"monthly spend cap (${settings.monthly_cap_usd:.2f}) would be exceeded")
 

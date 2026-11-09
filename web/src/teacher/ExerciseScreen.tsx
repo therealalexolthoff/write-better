@@ -26,15 +26,23 @@ export function stateLabel(state: string): string {
 export default function ExerciseScreen({ exerciseId, onBack }: { exerciseId: string; onBack: () => void }) {
   const [exercise, setExercise] = useState<TeacherExercise | null>(null);
   const [error, setError] = useState("");
+  const [paused, setPaused] = useState("");
 
   useEffect(() => {
     api<TeacherExercise>(`/exercises/${exerciseId}`).then(setExercise, (err) => setError(err.message));
+    // Whether the monthly AI cap has paused feedback (api/app/exercises.py).
+    api<{ paused: boolean; message: string }>("/ai-status").then((s) => setPaused(s.paused ? s.message : ""), () => {});
   }, [exerciseId]);
 
   return (
     <main className="page wide">
       <button className="link" onClick={onBack}>← All exercises</button>
       {error && <p className="error">{error}</p>}
+      {paused && (
+        <p className="confirm" role="status">
+          <strong>{paused.split(". ")[0]}.</strong> {paused.split(". ").slice(1).join(". ")}
+        </p>
+      )}
       {exercise && <Review exercise={exercise} onChange={setExercise} />}
     </main>
   );

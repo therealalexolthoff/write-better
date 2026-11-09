@@ -3,10 +3,11 @@
 // this only collects input. The admin never sees student work.
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api";
+import type { Spending } from "../types";
 
 type Signup = { uid: string; name: string; email: string; email_verified: boolean; created_at: string };
 type Teacher = { uid: string; name: string; email: string; active: boolean; student_count: number };
-type Tab = "signups" | "teachers";
+type Tab = "signups" | "teachers" | "spending";
 
 export default function AdminApp({ initialTab = "signups" }: { initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -20,8 +21,11 @@ export default function AdminApp({ initialTab = "signups" }: { initialTab?: Tab 
         <button role="tab" aria-selected={tab === "teachers"} className={tab === "teachers" ? "active" : ""} onClick={() => setTab("teachers")}>
           Teachers
         </button>
+        <button role="tab" aria-selected={tab === "spending"} className={tab === "spending" ? "active" : ""} onClick={() => setTab("spending")}>
+          Spending
+        </button>
       </div>
-      {tab === "signups" ? <Signups /> : <Teachers />}
+      {tab === "signups" ? <Signups /> : tab === "teachers" ? <Teachers /> : <SpendingTab />}
     </main>
   );
 }
@@ -282,5 +286,137 @@ function Transfer({
         <button onClick={onCancel}>Cancel</button>
       </div>
     </section>
+  );
+}
+
+// ---- spending ----
+
+const dollars = (n: number) => `$${n.toFixed(2)}`;
+const monthName = (key: string) =>
+  new Date(`${key}-01T00:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+const OPERATIONS: Record<string, string> = { evaluate_writing: "Writing feedback", transcribe: "Handwriting transcription" };
+
+function SpendingTab() {
+  const [data, setData] = useState<Spending | null>(null);
+  const [error, setError] = useState("");
+  const [cap, setCap] = useState("");
+  const load = () =>
+    api<Spending>("/admin/spending").then((d) => {
+      setData(d);
+      setCap(d.cap_usd.toFixed(2));
+    }, (err) => setError(err.message));
+  useEffect(() => {
+    load();
+  }, []);
+  const { message, busy, run } = useAction(load);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!data) return <p className="loading">Loading…</p>;
+
+  const share = data.cap_usd > 0 ? Math.min(1, data.total_usd / data.cap_usd) : 1;
+  const level = data.paused ? "critical" : share >= 0.75 ? "warning" : "ok";
+  const status = data.paused
+    ? "Paused: the cap is reached, so AI feedback is off until next month or a higher cap."
+    : share >= 0.75
+      ? "Over 75% of the cap. AI feedback pauses when the cap is reached."
+      : "Within the cap.";
+
+  function saveCap(e: FormEvent) {
+    e.preventDefault();
+    run(() => api("/admin/spending/cap", "PUT", { monthly_cap_usd: Number(cap) }), `The monthly cap is now ${dollars(Number(cap))}.`);
+  }
+
+  return (
+    <>
+      <section className="panel">
+        <h2>{monthName(data.month)}</h2>
+        <p className="stat">
+          <span className="stat-value">{dollars(data.total_usd)}</span>
+          <span className="stat-label">of a {dollars(data.cap_usd)} AI cap · {data.calls} AI call{data.calls === 1 ? "" : "s"}</span>
+        </p>
+        <div
+          className={`meter ${level}`}
+          role="meter"
+          aria-valuemin={0}
+          aria-valuemax={data.cap_usd}
+          aria-valuenow={data.total_usd}
+          aria-label={`AI spend this month: ${dollars(data.total_usd)} of ${dollars(data.cap_usd)}`}
+        >
+          <span className="meter-fill" style={{ width: `${share * 100}%` }} />
+        </div>
+        <p className={`status-line ${level}`}>
+          <span className="status-icon" aria-hidden="true">{level === "ok" ? "✓" : "!"}</span>
+          {status}
+        </p>
+        {data.failed_calls > 0 && (
+          <p className="muted">
+            {data.failed_calls} call{data.failed_calls === 1 ? "" : "s"} failed this month. Teachers can retry them; nothing was lost.
+          </p>
+        )}
+      </section>
+
+      <form onSubmit={saveCap} className="panel">
+        <h2>Monthly AI cap</h2>
+        <p className="muted">
+          AI feedback and transcription pause when this month's spend reaches the cap. Everything must stay under $20 a
+          month including hosting, so the cap can't go above {dollars(data.max_cap_usd)}. Set 0 to pause AI entirely.
+        </p>
+        <div className="row">
+          <label>
+            Cap (US dollars)
+            <input type="number" min={0} max={data.max_cap_usd} step="0.5" className="narrow-input wide-number" value={cap} onChange={(e) => setCap(e.target.value)} required />
+          </label>
+        </div>
+        <button className="primary" disabled={busy || Number(cap) === data.cap_usd}>Save cap</button>
+      </form>
+      {message && <p className="notice" aria-live="polite">{message}</p>}
+
+      <div className="split-tables">
+        <section>
+          <h2>By task</h2>
+          {data.by_operation.length === 0 ? (
+            <p className="muted">No AI calls yet this month.</p>
+          ) : (
+            <table className="middle">
+              <thead><tr><th>Task</th><th>Calls</th><th>Cost</th></tr></thead>
+              <tbody>
+                {data.by_operation.map((row) => (
+                  <tr key={row.operation}><td>{OPERATIONS[row.operation] ?? row.operation}</td><td>{row.calls}</td><td>{dollars(row.cost_usd)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+        <section>
+          <h2>By teacher</h2>
+          {data.by_teacher.length === 0 ? (
+            <p className="muted">No AI calls yet this month.</p>
+          ) : (
+            <table className="middle">
+              <thead><tr><th>Teacher</th><th>Calls</th><th>Cost</th></tr></thead>
+              <tbody>
+                {data.by_teacher.map((row) => (
+                  <tr key={row.uid}><td>{row.name}</td><td>{row.calls}</td><td>{dollars(row.cost_usd)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </div>
+
+      {data.months.length > 0 && (
+        <section>
+          <h2>Recent months</h2>
+          <table className="middle">
+            <thead><tr><th>Month</th><th>AI calls</th><th>AI spend</th></tr></thead>
+            <tbody>
+              {data.months.map((m) => (
+                <tr key={m.month}><td>{monthName(m.month)}</td><td>{m.calls}</td><td>{dollars(m.total_usd)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </>
   );
 }
