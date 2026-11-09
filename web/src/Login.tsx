@@ -9,18 +9,19 @@ import { PublicLayout } from "./Layout";
 type Mode = "student" | "staff";
 
 export default function Login() {
-  const [mode, setMode] = useState<Mode>("student");
+  // Teachers first: they're who the public pages speak to.
+  const [mode, setMode] = useState<Mode>("staff");
   return (
     <PublicLayout>
       <div className="auth-page">
         <section className="auth-card" aria-labelledby="sign-in-title">
           <h1 id="sign-in-title">Sign in</h1>
           <div className="segmented" role="tablist" aria-label="Who is signing in">
-            <button role="tab" aria-selected={mode === "student"} className={mode === "student" ? "active" : ""} onClick={() => setMode("student")}>
-              Student
-            </button>
             <button role="tab" aria-selected={mode === "staff"} className={mode === "staff" ? "active" : ""} onClick={() => setMode("staff")}>
               Teacher or admin
+            </button>
+            <button role="tab" aria-selected={mode === "student"} className={mode === "student" ? "active" : ""} onClick={() => setMode("student")}>
+              Student
             </button>
           </div>
           {mode === "student" ? <StudentLogin /> : <StaffLogin />}

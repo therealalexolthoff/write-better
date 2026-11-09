@@ -318,6 +318,7 @@ mark.span { background: var(--mark); border-bottom: 2px solid var(--mark-line); 
 @media (min-width: 48rem) { .hero-inner { padding: 5rem 2rem; } }
 .hero h1 { font-size: clamp(2rem, 6vw, 3.25rem); max-width: 16ch; margin-bottom: 1.25rem; }
 .eyebrow { color: var(--brand); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.85rem; }
+.hero-note { margin: 1.25rem 0 0; font-size: 0.95rem; }
 .lead { font-size: 1.15rem; color: var(--charcoal); max-width: 38rem; margin-bottom: 1.75rem; }
 
 .section { padding: 3rem 0; }

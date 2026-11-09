@@ -31,7 +31,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
       <footer className="site-footer">
         <div className="site-footer-inner">
           <Wordmark />
-          <p>Clear, teacher-checked feedback on English writing. Free to use.</p>
+          <p>Teacher-checked writing feedback for English classes. Free to use.</p>
           <nav aria-label="Footer">
             <Link to={PATHS.home}>Home</Link>
             <Link to={PATHS.privacy}>Privacy</Link>

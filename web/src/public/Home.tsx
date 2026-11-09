@@ -1,42 +1,43 @@
-// The public home page: what Write Better does and how it works.
+// The public home page, written for teachers: what Write Better does for
+// them and their class, and how it works.
 import { PublicLayout } from "../Layout";
 import { Link, PATHS } from "../router";
 
 const STEPS = [
   {
-    title: "Your teacher sets a writing task",
-    text: "A short email, a story about your weekend, an opinion: whatever fits your class.",
+    title: "Set a writing task",
+    text: "Write your own prompt, with word limits if you like, and assign it to your whole group or chosen students.",
   },
   {
-    title: "You write it",
-    text: "Type on your phone or computer, or write on paper and take a photo of each page. Your work saves as you go.",
+    title: "Students write",
+    text: "They type on a phone or computer, or write on paper and photograph each page. The AI copies out handwriting for you to check.",
   },
   {
-    title: "Your teacher checks the feedback",
-    text: "AI suggests where the mistakes are. Your teacher reviews every suggestion, then sends your results.",
+    title: "Review the AI's draft",
+    text: "Remove names first, then the AI marks each error with one of 14 codes. Accept, edit, recode or remove every mark, then release.",
   },
   {
-    title: "You fix your mistakes",
-    text: "Each mistake is marked with its type. Tap it, correct it, and see how you did.",
+    title: "Students correct their work",
+    text: "Students get one chance to correct each marked part. You mark each correction, and they see how they did.",
   },
 ];
 
-const PROMISES = [
+const REASONS = [
   {
-    title: "Checked by a teacher",
-    text: "The AI only drafts. Nothing reaches a student until their teacher has reviewed and approved it.",
+    title: "You stay in control",
+    text: "The AI only drafts. Nothing reaches a student until you have reviewed and approved it.",
   },
   {
     title: "Focused on accuracy",
-    text: "Grammar, punctuation, spelling and capitalization: the mistakes that matter most when you write in English.",
+    text: "Grammar, punctuation, spelling and capitalization only. No comments on style or content, and no scores or grades.",
   },
   {
-    title: "No scores or grades",
-    text: "Students see what to fix and how their corrections went. Never a number or a percentage.",
+    title: "See each student's patterns",
+    text: "A profile for every student shows their most common errors and how their corrections went, from work you approved.",
   },
   {
     title: "Private by design",
-    text: "Names and personal details are removed before any writing goes to the AI. Teachers only ever see their own students.",
+    text: "Names come out before any writing goes to the AI. You only see your own students, and your notes stay private.",
   },
 ];
 
@@ -45,16 +46,17 @@ export default function Home() {
     <PublicLayout>
       <section className="hero">
         <div className="hero-inner">
-          <p className="eyebrow">Writing feedback for adult English learners</p>
-          <h1>Write better English, one piece at a time.</h1>
+          <p className="eyebrow">For teachers of adult English learners</p>
+          <h1>Clear writing feedback for every student, checked by you.</h1>
           <p className="lead">
-            Write Better gives students clear feedback on grammar, punctuation, spelling and capitalization, checked by
-            their teacher before they see it.
+            Write Better drafts feedback on your students' grammar, punctuation, spelling and capitalization. You review
+            and edit every suggestion before they see it, and they correct their own mistakes.
           </p>
           <div className="row">
             <Link to={PATHS.signIn} className="button primary large">Sign in</Link>
             <a href="#how-it-works" className="button large">How it works</a>
           </div>
+          <p className="hero-note muted">Free to use. Students: sign in with the username your teacher gave you.</p>
         </div>
       </section>
 
@@ -75,12 +77,12 @@ export default function Home() {
 
       <section className="section tinted">
         <div className="section-inner">
-          <h2>Built around the teacher</h2>
+          <h2>Why teachers use it</h2>
           <ul className="promises">
-            {PROMISES.map((promise) => (
-              <li key={promise.title}>
-                <h3>{promise.title}</h3>
-                <p>{promise.text}</p>
+            {REASONS.map((reason) => (
+              <li key={reason.title}>
+                <h3>{reason.title}</h3>
+                <p>{reason.text}</p>
               </li>
             ))}
           </ul>
@@ -90,17 +92,18 @@ export default function Home() {
       <section className="section">
         <div className="section-inner split">
           <div>
-            <h2>For students</h2>
+            <h2>Simple for your students</h2>
             <p>
-              Your teacher creates your account and tells you your username. Sign in on any phone or computer to see
-              your writing tasks and your results.
+              You create each student's account and give them a username. They sign in on any phone or computer, see
+              their tasks, and get their results with each mistake marked by its type. Large text, plain English, and
+              their work saves as they go.
             </p>
           </div>
           <div>
-            <h2>For teachers</h2>
+            <h2>Free to use</h2>
             <p>
-              Assign writing to your class, review AI-drafted feedback in one place, and see each student's most
-              common mistakes over time. Write Better is free to use.
+              Write Better is free for teachers and students. You only ever see your own students, and their data stays on
+              Google Cloud in the United States. <Link to={PATHS.privacy}>How we handle data</Link>
             </p>
           </div>
         </div>
