@@ -70,7 +70,7 @@ def public_config() -> dict:
 # answers 404. Static files are mounted last so every API route above takes
 # precedence. In local dev the folder doesn't exist and Vite's dev server
 # is used instead.
-PAGES = ("/privacy", "/sign-in", "/sign-up", "/app")  # "/" is served by the static mount
+PAGES = ("/privacy", "/sign-in", "/sign-up", "/app", "/account-action")  # "/" is served by the static mount
 _WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 if _WEB_DIST.is_dir():
 

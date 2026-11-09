@@ -14,6 +14,7 @@ import AdminApp from "./admin/AdminApp";
 import { AppHeader, PublicLayout } from "./Layout";
 import Login from "./Login";
 import Home from "./public/Home";
+import AccountAction from "./public/AccountAction";
 import Privacy from "./public/Privacy";
 import SignUp from "./public/SignUp";
 import { Link, PATHS, navigate, usePath } from "./router";
@@ -28,6 +29,7 @@ export default function App() {
   const path = usePath();
   if (path === PATHS.home) return <Home />;
   if (path === PATHS.privacy) return <Privacy />;
+  if (path === PATHS.accountAction) return <AccountAction />;
   if (path === PATHS.signIn || path === PATHS.signUp || path === PATHS.app) return <SignedInArea path={path} />;
   return <NotFound />;
 }

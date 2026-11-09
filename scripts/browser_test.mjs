@@ -29,13 +29,13 @@ let id = 0; const pending = new Map(); const problems = [];
 ws.addEventListener("message", (ev) => { const m = JSON.parse(ev.data);
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result); pending.delete(m.id); }
   if (m.method === "Runtime.exceptionThrown") problems.push("exception: " + (m.params.exceptionDetails.exception?.description ?? "").slice(0, 160));
-  if (m.method === "Log.entryAdded" && m.params.entry.level === "error") problems.push("log: " + m.params.entry.text.slice(0, 160));
+  if (m.method === "Log.entryAdded" && m.params.entry.level === "error" && !/favicon|status of 404/.test(m.params.entry.text)) problems.push("log: " + m.params.entry.text.slice(0, 160));
   if (m.method === "Network.loadingFailed" && m.params.blockedReason) problems.push("blocked: " + m.params.blockedReason);
-  if (m.method === "Network.responseReceived" && m.params.response.status >= 400) problems.push(`http ${m.params.response.status}: ${m.params.response.url.split("?")[0].slice(0, 110)}`); });
+  if (m.method === "Network.responseReceived" && m.params.response.status >= 400 && !m.params.response.url.endsWith("/favicon.ico")) problems.push(`http ${m.params.response.status}: ${m.params.response.url.split("?")[0].slice(0, 110)}`); });
 const send = (method, params = {}) => new Promise((r) => { pending.set(++id, r); ws.send(JSON.stringify({ id, method, params })); });
 for (const d of ["Runtime", "Log", "Network", "Page"]) await send(`${d}.enable`);
 const run = async (js) => (await send("Runtime.evaluate", { expression: js, awaitPromise: true, returnByValue: true })).result.value;
-const text = () => run("document.body.innerText");
+const text = async () => (await run("document.body ? document.body.innerText : ''")) ?? "";
 const waitFor = async (needle, ms = 20000) => { for (let t = 0; t < ms; t += 400) { if ((await text()).includes(needle)) return true; await sleep(400); } return false; };
 // React-friendly typing: the native value setter, then an input event.
 const type = (selector, value) => run(`(() => { const el = document.querySelector(${JSON.stringify(selector)});
@@ -47,8 +47,8 @@ const totp = (secret) => { const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; 
   const key = Buffer.from(bits.match(/.{8}/g).map((b) => parseInt(b, 2))); const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000))); const h = createHmac("sha1", key).update(counter).digest();
   const o = h[h.length - 1] & 15; return String((h.readUInt32BE(o) & 0x7fffffff) % 1000000).padStart(6, "0"); };
-const step = (name, ok) => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); return ok; };
-let ok = true;
+const step = (name, ok) => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) text().then((t) => console.log("  page shows:", t.replace(/\s+/g, " ").slice(0, 240))); return ok; };
+let ok = true; let linked = "";
 try {
   await send("Page.navigate", { url: `${APP}/sign-up` });
   ok &&= step("sign-up page loads", await waitFor("Sign up as a teacher"));
@@ -70,11 +70,42 @@ try {
   ok &&= step("password step asks for the authenticator code", await waitFor("Enter the 6-digit") || await waitFor("6-digit code in your authenticator"));
   await type('input[autocomplete="one-time-code"]', totp(key)); await click("Verify and sign in");
   ok &&= step("signed in with the code: the teacher's first-run screen shows", await waitFor("Welcome to Write Better"));
+  // The admin creates a teacher: their one-time links open the app's own page.
+  const LINKED = `linktest${Date.now()}@example.com`; linked = LINKED;
+  const [resetLink, verifyLink] = execFileSync(PYTHON, [ADMIN_STEP, "links", LINKED], { env: { ...process.env, APP, KEY: (await (await fetch(`${APP}/config`)).json()).firebase.apiKey } }).toString().trim().split("\n").slice(-2);
+  ok &&= step("setup links open the app's own page", resetLink.startsWith(`${APP}/account-action?`));
+  // Google's hosted page: the person presses "Complete verification" (it
+  // stops email scanners from verifying accounts by opening links).
+  await send("Page.navigate", { url: verifyLink });
+  await waitFor("COMPLETE VERIFICATION");
+  await run(`(() => { const el = [...document.querySelectorAll("button, a, [role=button]")].find((x) => /complete verification/i.test(x.innerText)); el?.click(); return !!el; })()`);
+  await sleep(4000);
+  const verified = execFileSync(PYTHON, [ADMIN_STEP, "verified", LINKED]).toString().trim().split("\n").pop();
+  ok &&= step("a verification email's link confirms the address", verified === "verified");
+  await send("Page.navigate", { url: resetLink });
+  ok &&= step("a setup link asks for a new password", await waitFor("Set your password"));
+  const NEW = "Linked-" + Math.random().toString(36).slice(2) + "x9";
+  await type('input[autocomplete="new-password"]', NEW);
+  await run(`(() => { const el = document.querySelectorAll('input[autocomplete="new-password"]')[1];
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, ${JSON.stringify(NEW)});
+    el.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+  await click("Set password");
+  ok &&= step("the password is set", await waitFor("Your password is set"));
+  // A fresh browser: the first test teacher is still signed in here. Leave
+  // the app's pages first, so nothing holds its storage open while clearing.
+  await send("Page.navigate", { url: "about:blank" });
+  await sleep(1000);
+  await send("Storage.clearDataForOrigin", { origin: APP, storageTypes: "all" });
+  await send("Page.navigate", { url: `${APP}/sign-in` });
+  await waitFor("Teacher or admin");
+  await type('input[type="email"]', LINKED); await type('input[type="password"]', NEW); await click("Next");
+  ok &&= step("the new password signs in (to the authenticator setup)", await waitFor("Set up an authenticator app"));
   ok &&= step("no security-policy blocks or errors on the way", problems.length === 0);
   if (problems.length) console.log("  " + problems.join("\n  "));
 } catch (err) {
   ok = false; console.log("ERROR", err.message);
 } finally {
-  console.log("  " + execFileSync(PYTHON, [ADMIN_STEP, "cleanup", EMAIL]).toString().trim());
+  await sleep(500);
+  for (const email of [EMAIL, linked].filter(Boolean)) console.log("  " + execFileSync(PYTHON, [ADMIN_STEP, "cleanup", email]).toString().trim());
   ws.close(); chrome.kill(); process.exit(ok ? 0 : 1);
 }

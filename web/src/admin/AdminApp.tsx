@@ -233,8 +233,10 @@ function NewTeacher({ onCreated }: { onCreated: (name: string, url: string) => v
 }
 
 // A one-time link for the admin to send: there is no email service.
-function LinkBox({ label, url, onClose }: { label: string; url: string; onClose: () => void }) {
+function LinkBox({ label, url: path, onClose }: { label: string; url: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
+  // The API returns a path on this app (api/app/identity.py, action_link_path).
+  const url = path.startsWith("/") ? `${window.location.origin}${path}` : path;
   return (
     <section className="panel link-box" aria-live="polite">
       <h2>{label}</h2>

@@ -9,14 +9,14 @@ Write Better runs on one Google Cloud project, `write-better-app` (region `us-ea
    - Firestore (native mode) with daily backups kept 7 days, and the private photo bucket;
    - the two service accounts with only the roles they need (the API's storage access is limited to the photo bucket);
    - Identity Platform: email and password sign-in with sign-up allowed (teachers have no role until the admin approves them), authenticator apps (TOTP), email enumeration protection, and users can't delete themselves from the browser;
-   - the browser's sign-in key, limited to the two sign-in services and to the app's address;
+   - the browser's sign-in key, limited to the two sign-in services, the app's address, and Google's hosted page that verification emails link to (Identity Platform won't let that link be changed; links the admin hands out open the app's own `/account-action` page instead);
    - both Cloud Run services: the harness is private (only the API's service account may call it, at most 2 instances), the API is public (at most 3 instances);
    - the deny-all Firestore rules (`infra/firestore.rules`).
 3. Then:
    - **Budget** (alerts to billing admins at $10, $15 and $20):
      `gcloud billing budgets create --billing-account=<id> --display-name="Write Better monthly" --budget-amount=20USD --filter-projects=projects/<project> --calendar-period=month --threshold-rule=percent=0.5 --threshold-rule=percent=0.75 --threshold-rule=percent=1.0`
    - **Alerts** to the admin (failed AI calls, server errors, AI spend, new teacher sign-ups): `ALERT_EMAIL=<email> ./infra/monitoring.sh`
-   - **Admin account:** `GOOGLE_CLOUD_PROJECT=<project> .venv/bin/python infra/create_admin.py <admin email>`. It prints a one-time link to set the password; then sign in at `/sign-in`, verify the email and add an authenticator app.
+   - **Admin account:** `GOOGLE_CLOUD_PROJECT=<project> .venv/bin/python infra/create_admin.py <admin email> <app URL>`. It prints a one-time link to set the password; then sign in at `/sign-in`, verify the email and add an authenticator app.
    - **Claude access** (Cloud Console): Vertex AI > Model Garden > Claude Sonnet 5 > Enable, then IAM & Admin > Quotas: request the `anthropic-claude-sonnet` online prediction quota for the `us` multi-region. Access and quota are separate gates, with no fixed approval time. Until both are granted, every AI call falls back to Gemini (docs/HARNESS_SPEC.md section 8).
 
 ## Deploying a change
@@ -35,7 +35,7 @@ The same for the harness (`harness/Dockerfile`, `wb-harness`). `gcloud run deplo
 ## Live tests (run after a deploy)
 
 - `GOOGLE_CLOUD_PROJECT=write-better-app .venv/bin/python scripts/live_test.py <app URL> <a JPEG file>`: the whole path through the API with throwaway accounts and real authenticator codes, including two real AI calls (a few cents), a second teacher's isolation, resetting an authenticator, and deleting a student. 26 checks.
-- `node scripts/browser_test.mjs <app URL>`: a teacher's sign-up, approval, authenticator setup and sign-in through the real pages in headless Chrome, under the live security headers. 9 checks.
+- `node scripts/browser_test.mjs <app URL>`: through the real pages in headless Chrome, under the live security headers: a teacher's sign-up, approval, QR/key authenticator setup and sign-in; then an admin-created teacher's verification link (on Google's page) and setup link (on the app's page) and their first sign-in. 14 checks.
 
 Both delete everything they create, even when a check fails.
 

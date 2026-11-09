@@ -14,6 +14,8 @@ Accounts:
 The role is a custom claim: "admin", "teacher" or "student" (auth.py).
 """
 
+from urllib.parse import parse_qs, urlencode, urlsplit
+
 import firebase_admin
 from firebase_admin import auth as fb_auth
 
@@ -84,11 +86,21 @@ def create_teacher_user(email: str, name: str) -> str:
         raise EmailTaken(email) from exc
 
 
+def action_link_path(link: str) -> str:
+    """The app's own page for an Identity Platform email link: the same
+    one-time code, opened at /account-action (web/src/public/AccountAction.tsx)
+    instead of Google's hosted page, which can't use the app's sign-in key.
+    A path, so it works on whatever address the app is served from."""
+    query = parse_qs(urlsplit(link).query)
+    return "/account-action?" + urlencode({"mode": query["mode"][0], "oobCode": query["oobCode"][0]})
+
+
 def password_setup_link(email: str) -> str:
-    """A one-time link to set (or reset) the account's password. The admin
-    copies it to the teacher: there is no email service of our own."""
+    """A one-time link (a path on the app) to set or reset the account's
+    password. The admin copies it to the teacher: there is no email service
+    of our own."""
     _get_app()
-    return fb_auth.generate_password_reset_link(email)
+    return action_link_path(fb_auth.generate_password_reset_link(email))
 
 
 def clear_authenticator(uid: str) -> None:

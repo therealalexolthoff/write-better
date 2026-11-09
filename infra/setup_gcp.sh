@@ -108,7 +108,11 @@ APP_HOST="${API_URL#https://}"
 echo "== Lock sign-in to the app's address =="
 idt PATCH "/admin/v2/projects/${PROJECT_ID}/config?updateMask=authorizedDomains" \
   "{\"authorizedDomains\": [\"${PROJECT_ID}.firebaseapp.com\", \"${APP_HOST}\"]}"
-gcloud services api-keys update "${KEY_NAME##*/}" --allowed-referrers="https://${APP_HOST}/*"
+# The key also works on Google's hosted page for this project, which the
+# verification emails link to (Identity Platform refuses to change that
+# link: EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED). Links the admin hands out open
+# the app's own page instead (api/app/identity.py, action_link_path).
+gcloud services api-keys update "${KEY_NAME##*/}" --allowed-referrers="https://${APP_HOST}/*,https://${PROJECT_ID}.firebaseapp.com/*"
 
 echo "== Deny all browser access to Firestore =="
 GOOGLE_CLOUD_PROJECT="${PROJECT_ID}" python3 infra/deploy_firestore_rules.py

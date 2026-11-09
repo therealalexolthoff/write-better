@@ -7,6 +7,7 @@ What protects Write Better, how each item was verified, and what's left. Re-chec
 - **No security headers.** Every response now carries a Content-Security-Policy (scripts only from the app; no other site may frame it), HSTS, `nosniff`, a referrer policy and a permissions policy (`api/app/security_headers.py`). Verified by `api/tests/test_health.py`, live headers, and no policy violations in Chrome on any page or through the whole sign-in journey.
 - **A taken student username crashed the request (500).** It now answers 409 with a plain message (`api/tests/test_students.py`).
 - **Unbounded scaling.** Cloud Run instances are capped (API 3, harness 2), which also caps what a flood of requests can cost.
+- **Email links didn't work.** Links the admin hands out (teacher setup, password resets, the admin's own) pointed at Google's hosted page with no key, and the sign-in key was locked to the app's address. Those links now open the app's own `/account-action` page with just the one-time code (`identity.action_link_path`). Verification emails still use Google's hosted page (Identity Platform refuses to change that link: `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`), so the key also allows `write-better-app.firebaseapp.com`, Google's page for this project. Verified live by `scripts/browser_test.mjs`.
 
 ## Checked and in place
 
@@ -20,7 +21,7 @@ What protects Write Better, how each item was verified, and what's left. Re-chec
 | Pending sign-ups reach nothing | A login with no role reaches only its own sign-up request and status. | Isolation test; live 401. |
 | Sign-up abuse | The email comes from the verified token, never the form (extra fields are refused); a hidden bot field; a daily limit of 20; Identity Platform's own limits; an alert email per sign-up; nothing works until the admin approves. | `test_signup.py`. Live: sign-up and approval. |
 | Passwords | Go only to Identity Platform (browser SDK or REST); the API never receives, stores or logs them. Admin-created teachers and the admin set theirs from a one-time link. | Code review; `test_signup.py` checks nothing password-like is stored. |
-| Sign-in key | Limited to the two sign-in services and to the app's address. | Live: the key used from another site is refused (403). |
+| Sign-in key | Limited to the two sign-in services, the app's address, and Google's hosted email-action page for this project. | Live: the key used from another site is refused (403). |
 | No direct client access to Firestore | Deny-all rules; the API uses a service account. | Live: unauthenticated REST read → 403. |
 | Photos | Private bucket with uniform access and public access prevention; only the API's service account has access, to that bucket only. Viewed only through 15-minute signed links: the teacher sees every page, a student only their own while the work is open. Metadata is stripped twice. | `test_writing.py`. Live: bucket listing → 401; a student's photo link works; after the student is deleted the link no longer does. |
 | The AI service is private | Only the API's service account may call it. | Live: direct request → 403. |

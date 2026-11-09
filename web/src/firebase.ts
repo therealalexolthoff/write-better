@@ -82,11 +82,14 @@ function signedInUser(): User {
 export async function teacherSignUp(name: string, email: string, password: string): Promise<void> {
   const { user } = await createUserWithEmailAndPassword(currentAuth(), email.trim(), password);
   await updateProfile(user, { displayName: name.trim() });
-  await sendEmailVerification(user);
+  await sendEmailVerification(user, BACK_TO_APP);
 }
 
+// The verification page Google hosts offers a button back to the app.
+const BACK_TO_APP = { url: `${window.location.origin}/app` };
+
 export async function resendVerificationEmail(): Promise<void> {
-  await sendEmailVerification(signedInUser());
+  await sendEmailVerification(signedInUser(), BACK_TO_APP);
 }
 
 // Reloads the account and gets a fresh token, so a newly verified email or

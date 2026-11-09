@@ -162,6 +162,7 @@ def create_teacher(body: NewTeacherBody, user: CurrentUser = Depends(require_adm
         {"name": body.name.strip(), "email": body.email, "active": True, "source": "admin", "created_at": _now()}
     )
     record_audit(user.uid, "create_teacher", target=uid)
+    # A path on the app: the admin screen shows it with the app's address.
     return {"uid": uid, "setup_link": identity.password_setup_link(body.email)}
 
 

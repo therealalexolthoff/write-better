@@ -4,7 +4,7 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 
 // Every page of the app. Keep in step with PAGES in api/app/main.py.
-export const PATHS = { home: "/", privacy: "/privacy", signIn: "/sign-in", signUp: "/sign-up", app: "/app" } as const;
+export const PATHS = { home: "/", privacy: "/privacy", signIn: "/sign-in", signUp: "/sign-up", app: "/app", accountAction: "/account-action" } as const;
 
 const listeners = new Set<() => void>();
 

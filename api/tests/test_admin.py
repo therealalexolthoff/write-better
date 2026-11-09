@@ -159,3 +159,10 @@ def test_transfer_moves_every_record(fake_db, as_admin, idp):
     again = client.post("/admin/teachers/t1/transfer", json={"to_teacher_id": "t2"}, headers=AUTH).json()["moved"]
     assert set(again.values()) == {0}
     assert _audit(fake_db).count("transfer_students") == 2
+
+
+def test_setup_links_open_the_apps_own_page():
+    from api.app.identity import action_link_path
+
+    google = "https://p.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=AbC-123_x&apiKey=&lang=en"
+    assert action_link_path(google) == "/account-action?mode=resetPassword&oobCode=AbC-123_x"
