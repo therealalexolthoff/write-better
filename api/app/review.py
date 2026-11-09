@@ -27,6 +27,7 @@ from shared.schemas import PROMPT_VERSION, EvaluateWritingRequest, EvaluateWriti
 from shared.validation import SpanError, resolve_annotations
 
 from . import jobs
+from .access import owned_exercise
 from .auth import CurrentUser, require_teacher
 from .exercises import _load_exercise, _load_submission, _submission_ref, _teacher_view, call_ai
 from .models import WRITING_KEY, EvaluateBody, ScrubbedBody
@@ -66,7 +67,7 @@ def _with_offsets(result: EvaluateWritingResult, text: str) -> dict:
     return {"annotations": annotations, "comment": result.comment}
 
 
-@router.put("/exercises/{exercise_id}/scrubbed")
+@router.put("/exercises/{exercise_id}/scrubbed", dependencies=[Depends(owned_exercise)])
 def save_scrubbed(exercise_id: str, body: ScrubbedBody, user: CurrentUser = Depends(require_teacher)) -> dict:
     """The teacher's edits to the scrubbed copy (FR-18). If an evaluation
     exists and the text changed, the evaluation is discarded - its spans
@@ -84,7 +85,7 @@ def save_scrubbed(exercise_id: str, body: ScrubbedBody, user: CurrentUser = Depe
     return _teacher_view(exercise_id, exercise)
 
 
-@router.post("/exercises/{exercise_id}/evaluate")
+@router.post("/exercises/{exercise_id}/evaluate", dependencies=[Depends(owned_exercise)])
 def evaluate(exercise_id: str, body: EvaluateBody, user: CurrentUser = Depends(require_teacher)) -> dict:
     """Send for evaluation (FR-19), or regenerate the evaluation with an
     optional note (FR-20). Only the scrubbed text is sent - never the
@@ -115,7 +116,7 @@ def evaluate(exercise_id: str, body: EvaluateBody, user: CurrentUser = Depends(r
     ref = _submission_ref(exercise_id)
     ref.update({"state": "evaluating", "evaluating_since": _now(), "state_before_evaluating": previous_state})
     try:
-        result, job_id = call_ai("evaluate_writing", req)
+        result, job_id = call_ai("evaluate_writing", req, user.uid)
         evaluation = _with_offsets(result, text)  # the API re-validated these spans already
     except Exception:
         ref.update({"state": previous_state})
@@ -137,7 +138,7 @@ def evaluate(exercise_id: str, body: EvaluateBody, user: CurrentUser = Depends(r
     return _teacher_view(exercise_id, exercise)
 
 
-@router.put("/exercises/{exercise_id}/evaluation")
+@router.put("/exercises/{exercise_id}/evaluation", dependencies=[Depends(owned_exercise)])
 def edit_evaluation(
     exercise_id: str, body: EvaluateWritingResult, user: CurrentUser = Depends(require_teacher)
 ) -> dict:
@@ -156,7 +157,7 @@ def edit_evaluation(
     return _teacher_view(exercise_id, exercise)
 
 
-@router.post("/exercises/{exercise_id}/approve")
+@router.post("/exercises/{exercise_id}/approve", dependencies=[Depends(owned_exercise)])
 def approve(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     """The teacher is done reviewing: draft_ready -> ready_to_release.
     Records on the evaluation's job what the teacher did with it."""

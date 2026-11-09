@@ -25,12 +25,12 @@ def test_call_harness_happy_path_records_job(monkeypatch, fake_db):
     }
     monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: _envelope(result_payload))
 
-    result, job_id = harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
+    result, job_id = harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ), "teacher-1")
 
     assert result.annotations[0].span_text == "go"
     assert spend.current_month_spend() == 0.0  # mock model is free
     job = fake_db.collection("jobs").document(job_id).get().to_dict()
-    assert job["status"] == "done" and job["operation"] == "evaluate_writing"
+    assert job["status"] == "done" and job["operation"] == "evaluate_writing" and job["teacher_id"] == "teacher-1"
 
 
 def test_call_harness_rejects_invalid_annotation_span(monkeypatch, fake_db):
@@ -42,7 +42,7 @@ def test_call_harness_rejects_invalid_annotation_span(monkeypatch, fake_db):
     monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: _envelope(bad_result))
 
     with pytest.raises(harness_ops.HarnessValidationFailed):
-        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
+        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ), "teacher-1")
 
     assert any(d.get("status") == "error" for d in fake_db.collection("jobs").stream())
 
@@ -52,7 +52,7 @@ def test_call_harness_rejects_a_transcription_missing_a_page(monkeypatch, fake_d
         "api.app.harness_ops.post_to_harness", lambda op, body: _envelope({"pages": [{"page": 1, "text": "a"}]})
     )
     with pytest.raises(harness_ops.HarnessValidationFailed):
-        harness_ops.call_harness("transcribe", TranscribeRequest(**BASE, pages=["p1", "p2"]))
+        harness_ops.call_harness("transcribe", TranscribeRequest(**BASE, pages=["p1", "p2"]), "teacher-1")
 
 
 def test_call_harness_respects_spend_cap(monkeypatch, fake_db):
@@ -64,7 +64,7 @@ def test_call_harness_respects_spend_cap(monkeypatch, fake_db):
     monkeypatch.setattr("api.app.harness_ops.post_to_harness", lambda op, body: called.append(1))
 
     with pytest.raises(harness_ops.SpendCapReached):
-        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ))
+        harness_ops.call_harness("evaluate_writing", EvaluateWritingRequest(**EVALUATE_REQ), "teacher-1")
 
     assert called == []  # never actually called the harness
 
@@ -72,4 +72,4 @@ def test_call_harness_respects_spend_cap(monkeypatch, fake_db):
 def test_cut_operations_are_unknown(fake_db):
     for operation in ("generate_exercise", "evaluate_exercise", "generate_lesson"):
         with pytest.raises(ValueError):
-            harness_ops.call_harness(operation, EvaluateWritingRequest(**EVALUATE_REQ))
+            harness_ops.call_harness(operation, EvaluateWritingRequest(**EVALUATE_REQ), "teacher-1")

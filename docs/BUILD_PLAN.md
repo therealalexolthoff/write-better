@@ -79,7 +79,7 @@ Keep the internal `exercises` name for now and show "writing assignment" in the 
 
 This is the most important phase. Today any teacher can see everything, and several routes read whole collections.
 
-**Data changes:**
+**Data changes** (Phase 2 adds `teacher_id` everywhere; the new collections are created in the phases that build them: `teachers` and `signup_requests` in Phase 4, `classes` in Phase 5, `assignments` in Phase 6):
 
 | Collection | Change |
 |---|---|

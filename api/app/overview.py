@@ -1,6 +1,6 @@
 """The class overview (docs/REQUIREMENTS.md FR-32): one screen listing
 each student with their unfinished work and the stage each piece is at.
-Teacher only.
+Teacher only, and only their own students and work.
 
 Work counts as finished once released with nothing left to do: released
 writing with nothing to revise, or a checked revision sent back to the
@@ -8,6 +8,7 @@ student.
 """
 
 from fastapi import APIRouter, Depends
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from .auth import CurrentUser, require_teacher
 from .firestore_client import get_db
@@ -38,14 +39,18 @@ def is_finished(submission: dict) -> bool:
 @router.get("/overview")
 def class_overview(user: CurrentUser = Depends(require_teacher)) -> list[dict]:
     db = get_db()
-    titles = {doc.id: doc.get("title") for doc in db.collection("exercises").stream()}
+
+    def mine(collection: str):
+        return db.collection(collection).where(filter=FieldFilter("teacher_id", "==", user.uid)).stream()
+
+    titles = {doc.id: doc.get("title") for doc in mine("exercises")}
     rows = {
         doc.id: {"student_id": doc.id, "username": doc.get("username"), "work": []}
-        for doc in db.collection("students").stream()
+        for doc in mine("students")
         if doc.get("active")
     }
 
-    for doc in db.collection("submissions").stream():
+    for doc in mine("submissions"):
         submission = doc.to_dict()
         row = rows.get(submission["student_id"])
         if row is None or is_finished(submission):

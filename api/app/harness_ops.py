@@ -47,10 +47,12 @@ def _validate_semantics(operation: str, req, result) -> None:
         check_page_numbers([p.page for p in result.pages], len(req.pages))
 
 
-def call_harness(operation: str, req) -> tuple[object, str]:
+def call_harness(operation: str, req, teacher_id: str) -> tuple[object, str]:
     """Calls one harness operation end to end. Returns the validated
     operation-specific result (not the response envelope) and the job id,
-    so the caller can later record what the teacher did with the result."""
+    so the caller can later record what the teacher did with the result.
+    teacher_id is recorded on the job: the teacher whose student this is.
+    It never goes to the harness."""
     if operation not in _OPERATIONS:
         raise ValueError(f"unknown operation {operation!r}")
     _, response_cls = _OPERATIONS[operation]
@@ -60,7 +62,7 @@ def call_harness(operation: str, req) -> tuple[object, str]:
         log_event("spend_cap_reached", "WARNING", operation=operation, cap_usd=settings.monthly_cap_usd)
         raise SpendCapReached(f"monthly spend cap (${settings.monthly_cap_usd:.2f}) would be exceeded")
 
-    job_id = jobs.create_job(operation, req.student_id, req.prompt_version)
+    job_id = jobs.create_job(operation, req.student_id, teacher_id, req.prompt_version)
 
     try:
         raw = post_to_harness(operation, req.model_dump(mode="json"))

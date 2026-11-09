@@ -9,12 +9,13 @@ from datetime import datetime, timezone
 from .firestore_client import get_db
 
 
-def create_job(operation: str, student_id: str, prompt_version: str) -> str:
+def create_job(operation: str, student_id: str, teacher_id: str, prompt_version: str) -> str:
     doc_ref = get_db().collection("jobs").document()
     doc_ref.set(
         {
             "operation": operation,
             "student_id": student_id,
+            "teacher_id": teacher_id,
             "prompt_version": prompt_version,
             "status": "running",
             "created_at": datetime.now(timezone.utc),

@@ -350,7 +350,7 @@ def test_photos_need_a_writing_exercise_before_evaluation(monkeypatch, fake_db, 
 
 
 def test_writing_for_several_students(monkeypatch, fake_db, as_teacher, harness, student):  # noqa: F811
-    fake_db.collection("students").document("s3").set({"username": "Kim", "auth_uid": "u3", "active": False})
+    fake_db.collection("students").document("s3").set({"username": "Kim", "auth_uid": "u3", "active": False, "teacher_id": "teacher-1"})
     draft = {"kind": "writing", "title": "My town", "prompt": "Describe your town.", "min_words": 40, "max_words": None}
     url = "/exercises/writing-for-students"
 

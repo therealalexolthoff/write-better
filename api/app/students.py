@@ -1,6 +1,7 @@
 """Student account lifecycle: create, deactivate, reset password, delete.
 
-Only the teacher may call these - see docs/REQUIREMENTS.md FR-1/FR-3/FR-4.
+Only a student's own teacher may call these (access.py) - see
+docs/REQUIREMENTS.md FR-1/FR-3/FR-4. A student may read their own record.
 Deletion requires the caller to pass the student's exact username as
 confirmation (the UI-level "type the username to confirm" from FR-4,
 enforced here too, not just in the React screen). Every lifecycle change
@@ -16,7 +17,8 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 from . import identity, photos
 from .audit import record as record_audit
-from .auth import CurrentUser, require_self_or_teacher, require_teacher
+from .access import owned_student, student_for_caller
+from .auth import CurrentUser, require_teacher
 from .firestore_client import get_db
 from .profile import student_profile
 from .models import (
@@ -49,6 +51,7 @@ def create_student(
         {
             "username": body.username,
             "auth_uid": uid,
+            "teacher_id": user.uid,
             "active": True,
             "teacher_notes": "",
             "created_at": datetime.now(timezone.utc),
@@ -60,24 +63,22 @@ def create_student(
 
 @router.get("", response_model=list[StudentPublic])
 def list_students(user: CurrentUser = Depends(require_teacher)) -> list[StudentPublic]:
-    docs = get_db().collection("students").stream()
+    docs = get_db().collection("students").where(filter=FieldFilter("teacher_id", "==", user.uid)).stream()
     return [
         StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"))
         for doc in docs
     ]
 
 
-@router.get("/{student_id}", response_model=StudentPublic)
-def get_student(
-    student_id: str, user: CurrentUser = Depends(require_self_or_teacher)
-) -> StudentPublic:
+@router.get("/{student_id}", response_model=StudentPublic, dependencies=[Depends(student_for_caller)])
+def get_student(student_id: str) -> StudentPublic:
     doc = _student_doc(student_id).get()
     if not doc.exists:
         raise _not_found()
     return StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"))
 
 
-@router.get("/{student_id}/profile")
+@router.get("/{student_id}/profile", dependencies=[Depends(owned_student)])
 def get_profile(student_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     """The learner profile (FR-30) and the teacher's private notes (FR-31).
     Teacher only: students never see either."""
@@ -87,7 +88,7 @@ def get_profile(student_id: str, user: CurrentUser = Depends(require_teacher)) -
     return {"profile": student_profile(student_id), "teacher_notes": doc.get("teacher_notes") or ""}
 
 
-@router.put("/{student_id}/notes")
+@router.put("/{student_id}/notes", dependencies=[Depends(owned_student)])
 def save_notes(student_id: str, body: NotesBody, user: CurrentUser = Depends(require_teacher)) -> dict:
     """The teacher's private notes. Never sent to the AI provider."""
     doc_ref = _student_doc(student_id)
@@ -97,7 +98,7 @@ def save_notes(student_id: str, body: NotesBody, user: CurrentUser = Depends(req
     return {"status": "ok"}
 
 
-@router.post("/{student_id}/deactivate", response_model=StudentPublic)
+@router.post("/{student_id}/deactivate", response_model=StudentPublic, dependencies=[Depends(owned_student)])
 def deactivate_student(
     student_id: str, user: CurrentUser = Depends(require_teacher)
 ) -> StudentPublic:
@@ -111,7 +112,7 @@ def deactivate_student(
     return StudentPublic(student_id=student_id, username=doc.get("username"), active=False)
 
 
-@router.post("/{student_id}/reset-password")
+@router.post("/{student_id}/reset-password", dependencies=[Depends(owned_student)])
 def reset_password(
     student_id: str, body: ResetPasswordRequest, user: CurrentUser = Depends(require_teacher)
 ) -> dict:
@@ -123,7 +124,7 @@ def reset_password(
     return {"status": "ok"}
 
 
-@router.delete("/{student_id}")
+@router.delete("/{student_id}", dependencies=[Depends(owned_student)])
 def delete_student(
     student_id: str, body: DeleteStudentRequest, user: CurrentUser = Depends(require_teacher)
 ) -> dict:

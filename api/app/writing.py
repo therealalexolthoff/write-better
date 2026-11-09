@@ -38,7 +38,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from shared.schemas import PROMPT_VERSION, TranscribeRequest
 
 from . import jobs, photos
-from .auth import CurrentUser, get_current_user, require_teacher
+from .access import exercise_for_caller, owned_exercise, students_exercise
+from .auth import CurrentUser, get_current_user, require_student, require_teacher
 from .exercises import (
     OPEN_STATES,
     _load_exercise,
@@ -121,7 +122,7 @@ def _student_pages(exercise_id: str) -> list[dict]:
     return _links([page for page in submission.get("photos", []) if _is_students(page)])
 
 
-@router.post("/exercises/{exercise_id}/photos")
+@router.post("/exercises/{exercise_id}/photos", dependencies=[Depends(exercise_for_caller)])
 def upload_photo(
     exercise_id: str,
     data: bytes = Body(media_type="image/jpeg"),
@@ -163,15 +164,13 @@ def _student_upload(exercise_id: str, data: bytes, user: CurrentUser) -> list[di
     return _student_pages(exercise_id)
 
 
-@router.delete("/exercises/{exercise_id}/photos")
+@router.delete("/exercises/{exercise_id}/photos", dependencies=[Depends(exercise_for_caller)])
 def remove_photos(exercise_id: str, user: CurrentUser = Depends(get_current_user)):
     """Removes every page, to start the upload again (e.g. pages in the
     wrong order). Any transcription already made is kept. A student
     removes only their own pages, and only while the exercise is open."""
     if user.role == "student":
         return _student_remove(exercise_id, user)
-    if user.role != "teacher":
-        raise HTTPException(status_code=403, detail="teacher only")
     exercise, submission = _load_writing(exercise_id, _PHOTO_STATES)
     for page in submission.get("photos", []):
         photos.delete(page["path"])
@@ -194,7 +193,7 @@ def _student_remove(exercise_id: str, user: CurrentUser) -> list[dict]:
     return _student_pages(exercise_id)
 
 
-@router.get("/exercises/{exercise_id}/photos")
+@router.get("/exercises/{exercise_id}/photos", dependencies=[Depends(exercise_for_caller)])
 def photo_links(exercise_id: str, user: CurrentUser = Depends(get_current_user)) -> list[dict]:
     """Short-lived links to view each page, in order. The teacher sees
     every page; a student sees only their own, and only until they submit
@@ -202,12 +201,10 @@ def photo_links(exercise_id: str, user: CurrentUser = Depends(get_current_user))
     if user.role == "student":
         load_for_student(exercise_id, user)
         return _student_pages(exercise_id)
-    if user.role != "teacher":
-        raise HTTPException(status_code=403, detail="teacher only")
     return _links((_load_submission(exercise_id) or {}).get("photos", []))
 
 
-@router.post("/exercises/{exercise_id}/transcribe")
+@router.post("/exercises/{exercise_id}/transcribe", dependencies=[Depends(owned_exercise)])
 def transcribe(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     """Sends the photos (and nothing else about the student but the opaque
     id) to the harness for a verbatim transcription (FR-24). If the call
@@ -241,7 +238,7 @@ def transcribe(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -
         changes["submitted_at"] = _now()  # handed in on paper: counts as submitted now
     ref.update(changes)
     try:
-        result, job_id = call_ai("transcribe", req)
+        result, job_id = call_ai("transcribe", req, user.uid)
     except Exception:
         ref.update({"state": previous_state})
         raise
@@ -261,7 +258,7 @@ def transcribe(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -
     return _teacher_view(exercise_id, exercise)
 
 
-@router.put("/exercises/{exercise_id}/transcription")
+@router.put("/exercises/{exercise_id}/transcription", dependencies=[Depends(owned_exercise)])
 def save_transcription(
     exercise_id: str, body: TranscriptionBody, user: CurrentUser = Depends(require_teacher)
 ) -> dict:
@@ -272,7 +269,7 @@ def save_transcription(
     return _teacher_view(exercise_id, exercise)
 
 
-@router.post("/exercises/{exercise_id}/final-source")
+@router.post("/exercises/{exercise_id}/final-source", dependencies=[Depends(owned_exercise)])
 def choose_final_source(
     exercise_id: str, body: FinalSourceBody, user: CurrentUser = Depends(require_teacher)
 ) -> dict:
@@ -312,8 +309,6 @@ def choose_final_source(
 def _revision_context(exercise_id: str, user: CurrentUser) -> tuple[str, list[dict]]:
     """The released text and its annotations, for the student's own
     writing exercise."""
-    if user.role != "student":
-        raise HTTPException(status_code=403, detail="students only")
     load_for_student(exercise_id, user)
     submission = _load_submission(exercise_id) or {}
     if submission.get("state") not in ("revision_open", "revision_submitted"):
@@ -321,8 +316,8 @@ def _revision_context(exercise_id: str, user: CurrentUser) -> tuple[str, list[di
     return submission["scrubbed_answers"][WRITING_KEY], submission["evaluation"]["annotations"]
 
 
-@router.put("/exercises/{exercise_id}/revision")
-def save_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = Depends(get_current_user)) -> dict:
+@router.put("/exercises/{exercise_id}/revision", dependencies=[Depends(students_exercise)])
+def save_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = Depends(require_student)) -> dict:
     """Autosave of the student's span edits (FR-26)."""
     _, annotations = _revision_context(exercise_id, user)
     update_open_submission(
@@ -334,8 +329,8 @@ def save_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = Depe
     return {"status": "saved"}
 
 
-@router.post("/exercises/{exercise_id}/revision/submit")
-def submit_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = Depends(get_current_user)) -> dict:
+@router.post("/exercises/{exercise_id}/revision/submit", dependencies=[Depends(students_exercise)])
+def submit_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = Depends(require_student)) -> dict:
     """Submits the one revision round and locks it (FR-26). Only spans the
     student actually changed are kept."""
     text, annotations = _revision_context(exercise_id, user)
@@ -354,7 +349,7 @@ def submit_revision(exercise_id: str, body: RevisionBody, user: CurrentUser = De
     return {"status": "submitted"}
 
 
-@router.put("/exercises/{exercise_id}/revision/outcomes")
+@router.put("/exercises/{exercise_id}/revision/outcomes", dependencies=[Depends(owned_exercise)])
 def mark_outcomes(exercise_id: str, body: OutcomesBody, user: CurrentUser = Depends(require_teacher)) -> dict:
     """The teacher marks each changed span fixed, unfixed, or
     changed_wrongly (FR-27). Spans can be marked a few at a time."""
@@ -367,7 +362,7 @@ def mark_outcomes(exercise_id: str, body: OutcomesBody, user: CurrentUser = Depe
     return _teacher_view(exercise_id, exercise)
 
 
-@router.post("/exercises/{exercise_id}/revision/send")
+@router.post("/exercises/{exercise_id}/revision/send", dependencies=[Depends(owned_exercise)])
 def send_outcomes(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     """Shows the student how their revision went: each changed span's
     outcome, and the correction for each one not fixed (FR-27). Only once

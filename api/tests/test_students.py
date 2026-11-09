@@ -44,10 +44,10 @@ def test_create_student_as_teacher(monkeypatch, fake_db, as_teacher):
 
 def test_student_cannot_read_another_students_record(monkeypatch, fake_db):
     fake_db.collection("students").document("s1").set(
-        {"username": "Alex", "auth_uid": "u1", "active": True}
+        {"username": "Alex", "auth_uid": "u1", "active": True, "teacher_id": "teacher-1"}
     )
     fake_db.collection("students").document("s2").set(
-        {"username": "Blair", "auth_uid": "u2", "active": True}
+        {"username": "Blair", "auth_uid": "u2", "active": True, "teacher_id": "teacher-1"}
     )
 
     as_student(monkeypatch, student_id="s1", uid="u1")
@@ -67,7 +67,7 @@ def test_student_cannot_list_all_students(monkeypatch, fake_db):
 
 def test_deactivate_requires_teacher(monkeypatch, fake_db):
     fake_db.collection("students").document("s1").set(
-        {"username": "Alex", "auth_uid": "u1", "active": True}
+        {"username": "Alex", "auth_uid": "u1", "active": True, "teacher_id": "teacher-1"}
     )
     as_student(monkeypatch, student_id="s1", uid="u1")
     response = client.post("/students/s1/deactivate", headers=AUTH)
@@ -76,7 +76,7 @@ def test_deactivate_requires_teacher(monkeypatch, fake_db):
 
 def test_deactivate_is_audited(monkeypatch, fake_db, as_teacher):
     fake_db.collection("students").document("s1").set(
-        {"username": "Alex", "auth_uid": "u1", "active": True}
+        {"username": "Alex", "auth_uid": "u1", "active": True, "teacher_id": "teacher-1"}
     )
     monkeypatch.setattr("api.app.identity.disable_user", lambda uid: None)
 
@@ -89,7 +89,7 @@ def test_deactivate_is_audited(monkeypatch, fake_db, as_teacher):
 
 def test_reset_password_is_audited(monkeypatch, fake_db, as_teacher):
     fake_db.collection("students").document("s1").set(
-        {"username": "Alex", "auth_uid": "u1", "active": True}
+        {"username": "Alex", "auth_uid": "u1", "active": True, "teacher_id": "teacher-1"}
     )
     monkeypatch.setattr("api.app.identity.reset_password", lambda uid, password: None)
 
@@ -103,7 +103,7 @@ def test_reset_password_is_audited(monkeypatch, fake_db, as_teacher):
 
 def test_delete_requires_matching_username(monkeypatch, fake_db, as_teacher):
     fake_db.collection("students").document("s1").set(
-        {"username": "Alex", "auth_uid": "u1", "active": True}
+        {"username": "Alex", "auth_uid": "u1", "active": True, "teacher_id": "teacher-1"}
     )
     monkeypatch.setattr("api.app.identity.delete_user", lambda uid: None)
     monkeypatch.setattr("api.app.photos.delete_folder", lambda prefix: None)

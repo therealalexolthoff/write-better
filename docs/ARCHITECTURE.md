@@ -1,10 +1,10 @@
 # Architecture (v1)
 
-> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+> **Status:** updated in Phase 2 (2026-11-09): admin, teacher and student roles, and teacher ownership on every record. Classes, assignments and sign-up requests are added to the data model in the phases that build them (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
 
 ## 1. Overview
 ```
-Student phone / Teacher laptop
+Student phone / Teacher or admin laptop
         |  HTTPS (React SPA, session via Identity Platform ID token)
         v
   API service (Cloud Run, Python/FastAPI)  ----> Firestore (all data)
@@ -24,23 +24,23 @@ All business logic and authorization live in the API. The harness has **no** dat
 
 ## 3. Key decisions
 1. **Clients never touch Firestore or Storage directly.** Firestore/Storage rules deny all client access. Autosave is a debounced API call. No realtime features.
-2. **Harness is a separate private service** with five operations and no data access. Swappable model/provider.
-3. **Learner profile is computed by plain code** from approved data; the harness only reads a compact summary.
+2. **Harness is a separate private service** with two operations (transcribe, evaluate_writing) and no data access. Swappable model/provider.
+3. **Learner profile is computed by plain code** from approved data. The harness never sees it.
 4. **Harness calls are synchronous** with a persisted job record (no queue). Failure leaves a retryable job. Revisit Cloud Tasks only if latency becomes a problem.
-5. **Identity Platform kept** (not custom auth): hardened password handling, brute-force protection, built-in TOTP. Students use a synthetic email `<username>@students.internal` created and hidden inside one function (confirmed: Identity Platform does not validate the domain, only that the string is a syntactically unique email); the teacher uses a real, **verified** email + TOTP — confirmed verified email is a hard prerequisite for MFA enrollment, which only applies to the teacher since students never enroll in MFA.
+5. **Identity Platform kept** (not custom auth): hardened password handling, brute-force protection, built-in TOTP. Students use a synthetic email `<username>@students.internal` created and hidden inside one function (confirmed: Identity Platform does not validate the domain, only that the string is a syntactically unique email); teachers and the admin use a real, **verified** email + TOTP — confirmed verified email is a hard prerequisite for MFA enrollment, which only applies to them since students never enroll in MFA. The role (`admin`, `teacher` or `student`) is a custom claim on the account; an account without one is refused everywhere.
 6. **Original vs scrubbed text are separate fields.** Only scrubbed text leaves the API.
 7. **Strict validation** of all harness output; the API never trusts the harness.
 8. **Hard spend cap in the app** (Google budgets only alert).
-9. **Opaque IDs**: each student has a random ID (not derived from username). Usernames and notes-with-names never go to the harness.
+9. **Opaque IDs**: each student has a random ID (not derived from username). Usernames and teacher notes never go to the harness.
+10. **Teacher ownership on every record.** Each student, exercise, submission and job record stores `teacher_id` (the owning teacher's account uid). Ownership checks run before each route reads its request (`api/app/access.py`).
 
 ## 4. Data model (Firestore)
 | Collection | Contents |
 |---|---|
-| `students` | id (opaque), username, auth uid, active, teacher_notes, created_at. **Build decision (Phase 7):** the profile is not stored; it is computed on demand from approved submissions (`api/app/profile.py`), so it can never drift from its data. teacher_notes is one free-text field; the notes screen asks for newest notes at the top, and the context assembler keeps the first 1,500 characters. |
-| `exercises` | id, student_id, kind (`grammar`/`writing`), status (`draft`/`assigned`), title, items or prompt, teacher_request, generation_history (versions, notes), settings (min/max words) |
-| `submissions` | id, exercise_id, student_id, state, original_answers, scrubbed_answers, final_source (`typed`/`photo`), transcription, photos[] (path, page order, uploaded_at, uploaded_by `teacher`/`student`), marks, annotations (with computed offsets), feedback, release_at, revision {edits, submitted_at, outcomes}, evaluation_valid flag |
-| `lessons` | id, student_id, status (`draft`/`assigned`), request, passage, examples, read_at |
-| `jobs` | id, operation, prompt_version, model, context_version, input_hash, status, latency, retries, tokens_in/out, cost, validation_outcome (`passed`/`repaired`/`rejected`), teacher_action (`accepted`/`edited`/`overridden`/`regenerated`), error |
+| `students` | id (opaque), username, auth uid, **teacher_id**, active, teacher_notes, created_at. The profile is not stored; it is computed on demand from approved submissions (`api/app/profile.py`), so it can never drift from its data. teacher_notes is one private free-text field, never sent to the harness. |
+| `exercises` | id (same as its submission), student_id, **teacher_id**, kind (`writing`), status (always `assigned`), title, prompt, min/max words, teacher_request, created_at, assigned_at |
+| `submissions` | id, exercise_id, student_id, **teacher_id**, state, answers (`{"text": ...}`, the original), scrubbed_answers, final_source (`typed`/`photo`), transcription, photos[] (path, uploaded_at, uploaded_by `teacher`/`student`), evaluation and evaluation_ai (annotations with computed offsets, comment), evaluation_valid, release_at, revision {edits, submitted_at, outcomes} |
+| `jobs` | id, operation, student_id, **teacher_id**, prompt_version, model, status, latency, tokens_in/out/cached, cost, validation_outcome (`passed`/`rejected`), teacher_action (`accepted`/`edited`/`regenerated`), error |
 | `spend` | month key, totals |
 | `settings` | single doc: monthly_cap, per-operation model names, alert thresholds, profile_window (default 5), token budgets |
 | `audit` | actor, action, target, timestamp |
@@ -49,33 +49,29 @@ Subcollections are fine where natural (e.g. submissions under students) if it si
 
 ## 5. Submission pipeline
 ```
-assigned -> in_progress -> submitted
-  grammar, no short answers:      submitted -> ready_to_release
-  has photo as final source:      submitted -> transcribing -> transcript_review -> scrub_review
-  otherwise:                      submitted -> scrub_review
-scrub_review -> evaluating -> draft_ready -> ready_to_release -> released
-writing only: released -> revision_open -> revision_submitted -> revision_reviewed
+assigned -> in_progress -> scrub_review                       (typed)
+assigned/in_progress -> transcribing -> transcript_review -> scrub_review   (handwritten)
+scrub_review -> evaluating -> draft_ready -> ready_to_release
+ready_to_release -> released                                 (nothing flagged)
+ready_to_release -> revision_open -> revision_submitted -> revision_reviewed
 ```
 - Reopen (teacher only): back to `in_progress`, audit-logged.
 - Editing scrubbed text after `draft_ready` sets `evaluation_valid=false` and returns to `scrub_review`.
 - Errors in any harness step: job status `error`, submission stays in its prior state, retry available.
 
 ## 6. Authorization
-- Student: may read/write only their own assigned, unsubmitted answers and their own photo pages on them (signed URLs, until submit); read own released results and lessons; mark lessons read; submit revision when open.
-- Teacher: everything, except impersonation. Photos only via signed URLs generated by the API.
-- Every endpoint checks role and ownership server-side. Student endpoints never return teacher-only fields (corrections, explanations on annotations, notes, original-vs-scrubbed, unreleased drafts).
+- Student: may read/write only their own assigned, unsubmitted answers and their own photo pages on them (signed URLs, until submit); read own released results; submit revision when open.
+- Teacher: only their own students and their work (records whose `teacher_id` is theirs), except impersonation. Another teacher's record answers "not found". Photos only via signed URLs generated by the API.
+- Admin: account and spending management (built in Phase 4). Refused by every route that reaches students or their work.
+- An account with no role (a pending teacher sign-up) is refused everywhere.
+- Every endpoint checks role and ownership server-side, before reading the request body (`api/app/access.py`). `api/tests/test_teacher_isolation.py` walks every endpoint as another teacher, the admin, and other students. Student endpoints never return teacher-only fields (corrections, explanations on annotations, notes, original-vs-scrubbed, unreleased drafts).
 
-## 7. Context assembler (API, deterministic, unit-tested)
-Builds each harness payload within a fixed token budget:
-- Profile summary: top N codes by recent count (window from settings), plus revision outcomes.
-- Teacher notes (length-capped, newest first).
-- Recent exercise titles and concepts (to avoid repeats).
-- Up to ~5 scrubbed, approved excerpts chosen by target error code (generation and lessons only).
-- Never included: username, original unscrubbed text, other students' data.
+## 7. Context assembler
+Removed in Phase 1: it fed exercise and lesson generation, which no longer exist.
 
 ## 8. Cost control and observability
-- Per call: estimate cost before, enforce cap, record actual after. Show monthly spend to the teacher.
-- Job records capture operation, prompt version, model, latency, retries, tokens, cost, validation outcome, and teacher action (accepted/edited/overridden/regenerated). Override rate per operation and prompt version is the main quality signal.
+- Per call: estimate cost before, enforce cap, record actual after. Show monthly spend to the admin (Phase 7).
+- Job records capture operation, prompt version, model, latency, retries, tokens, cost, validation outcome, and teacher action (accepted/edited/regenerated). Edit rate per operation and prompt version is the main quality signal.
 - Structured JSON logs to Cloud Logging with IDs and counts only (never student text/images). Cloud Monitoring alerts: harness error rate, spend thresholds. Billing alerts at $10/$15.
 - No third-party LLM tracing tools (they would receive student text).
 - Prompt caching for the static prompt prefix — confirmed supported on Vertex for Claude models (in-memory cache, 24-hour TTL).
@@ -92,6 +88,8 @@ Confirmed setup requirements for the project setup script:
 - Firestore native backup schedules: `gcloud firestore backups schedules create --database=DATABASE_ID --recurrence=daily --retention=7d` (confirmed supported, up to 14 weeks max retention).
 
 ## 11. Estimated monthly cost (confirmed)
+_Modelled for the single-teacher app, before Phase 1 removed exercise and lesson generation; Write Better makes fewer AI calls per student. Re-check against real job records._
+
 Cloud Run, Firestore, Identity Platform, Storage: within free tiers at this scale (Identity Platform free up to 50k MAU; TOTP MFA has no per-verification cost). Claude usage (model: `claude-sonnet-5` for all operations, `us` multi-region endpoint), modeling ~1 exercise generated + ~0.7 evaluations + ~0.5 lessons + ~0.25 photo transcriptions per student per week:
 - 8 students: ~$1-4/month
 - 30 students: ~$5-15/month (padded for regenerations/retries)

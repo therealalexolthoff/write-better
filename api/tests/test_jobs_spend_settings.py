@@ -5,7 +5,7 @@ from api.app.settings import get_settings
 
 
 def test_create_and_complete_job(fake_db):
-    job_id = jobs.create_job("generate_exercise", "s1", "v1")
+    job_id = jobs.create_job("evaluate_writing", "s1", "teacher-1", "v1")
     jobs.complete_job(
         job_id,
         model="mock",
@@ -22,7 +22,7 @@ def test_create_and_complete_job(fake_db):
 
 
 def test_fail_job(fake_db):
-    job_id = jobs.create_job("transcribe", "s1", "v1")
+    job_id = jobs.create_job("transcribe", "s1", "teacher-1", "v1")
     jobs.fail_job(job_id, "boom")
     doc = fake_db.collection("jobs").document(job_id).get()
     assert doc.get("status") == "error"

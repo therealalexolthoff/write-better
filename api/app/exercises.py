@@ -1,8 +1,10 @@
 """Writing exercises, end to end.
 
-Teacher: write an exercise and assign it to one or more students, list a
-student's exercises, release results, reopen a submission.
+Teacher: write an exercise and assign it to one or more of their own
+students, list a student's exercises, release results, reopen a submission.
 Student: list assigned work, open it, autosave the response, submit.
+Who may reach which exercise is checked in access.py, before each route
+runs; every exercise and submission records its teacher as teacher_id.
 
 The teacher always writes the exercise; the AI never does. Scrubbing and
 evaluation are in review.py; handwriting and revision in writing.py.
@@ -36,8 +38,9 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 from shared.taxonomy import CODE_DESCRIPTIONS, ErrorCode
 
+from .access import exercise_for_caller, owned_exercise, owned_student, students_exercise, teacher_owns
 from .audit import record as record_audit
-from .auth import CurrentUser, get_current_user, require_teacher
+from .auth import CurrentUser, get_current_user, require_student, require_teacher
 from .firestore_client import get_db
 from .harness_ops import HarnessValidationFailed, SpendCapReached, call_harness
 from .models import (
@@ -128,11 +131,11 @@ def load_for_student(exercise_id: str, user: CurrentUser) -> dict:
     return exercise
 
 
-def call_ai(operation: str, req) -> tuple[object, str]:
+def call_ai(operation: str, req, teacher_id: str) -> tuple[object, str]:
     """One harness call, with failures turned into teacher-readable errors.
     Invalid output is never returned (FR-8). Returns (result, job id)."""
     try:
-        return call_harness(operation, req)
+        return call_harness(operation, req, teacher_id)
     except SpendCapReached as exc:
         raise HTTPException(status_code=409, detail=f"{exc}. AI evaluation and transcription are paused.") from exc
     except HarnessValidationFailed as exc:
@@ -223,11 +226,12 @@ def _check_answer_shapes(answers: dict) -> None:
         raise HTTPException(status_code=422, detail=f"a writing answer is just {{{WRITING_KEY!r}: text}}")
 
 
-def _new_submission(exercise_id: str, student_id: str) -> dict:
+def _new_submission(exercise_id: str, student_id: str, teacher_id: str) -> dict:
     """The student's empty submission, created with their exercise."""
     return {
         "exercise_id": exercise_id,
         "student_id": student_id,
+        "teacher_id": teacher_id,
         "state": "assigned",
         "answers": {},
         "updated_at": _now(),
@@ -248,14 +252,15 @@ def taxonomy(user: CurrentUser = Depends(require_teacher)) -> list[dict]:
 def assign_writing_to_students(body: WritingForStudentsBody, user: CurrentUser = Depends(require_teacher)) -> dict:
     """A writing exercise the teacher wrote, assigned straight away to each
     chosen student. Each student gets their own copy. Either every copy is
-    created or none is."""
+    created or none is. Every chosen student must be the teacher's own:
+    another teacher's student looks the same as one that doesn't exist."""
     draft = body.draft
     if not draft.title.strip() or not draft.prompt.strip():
         raise HTTPException(status_code=422, detail="Give the exercise a title and a prompt.")
     student_ids = list(dict.fromkeys(body.student_ids))  # each student once, in the order picked
     for student_id in student_ids:
-        student = get_db().collection("students").document(student_id).get()
-        if not student.exists or not student.get("active"):
+        student = get_db().collection("students").document(student_id).get().to_dict()
+        if not teacher_owns(student, user) or not student.get("active"):
             raise HTTPException(status_code=404, detail="A chosen student was not found or is inactive.")
 
     count = len(student_ids)
@@ -265,6 +270,7 @@ def assign_writing_to_students(body: WritingForStudentsBody, user: CurrentUser =
         ref = get_db().collection("exercises").document()
         exercise = {
             "student_id": student_id,
+            "teacher_id": user.uid,
             "status": "assigned",
             **draft.model_dump(mode="json"),  # kind, title, prompt, word limits
             "teacher_request": f"Written by you, for {count} student{'s' if count > 1 else ''}.",
@@ -272,15 +278,21 @@ def assign_writing_to_students(body: WritingForStudentsBody, user: CurrentUser =
             "assigned_at": _now(),
         }
         batch.set(ref, exercise)
-        batch.set(_submission_ref(ref.id), _new_submission(ref.id, student_id))
+        batch.set(_submission_ref(ref.id), _new_submission(ref.id, student_id, user.uid))
         exercise_ids.append(ref.id)
     batch.commit()
     return {"exercise_ids": exercise_ids}
 
 
-@router.get("/exercises")
+@router.get("/exercises", dependencies=[Depends(owned_student)])
 def list_exercises(student_id: str, user: CurrentUser = Depends(require_teacher)) -> list[dict]:
-    docs = get_db().collection("exercises").where(filter=FieldFilter("student_id", "==", student_id)).stream()
+    docs = (
+        get_db()
+        .collection("exercises")
+        .where(filter=FieldFilter("student_id", "==", student_id))
+        .where(filter=FieldFilter("teacher_id", "==", user.uid))
+        .stream()
+    )
     summaries = []
     for doc in docs:
         submission = _load_submission(doc.id) or {}
@@ -295,7 +307,7 @@ def list_exercises(student_id: str, user: CurrentUser = Depends(require_teacher)
     return summaries
 
 
-@router.post("/exercises/{exercise_id}/release")
+@router.post("/exercises/{exercise_id}/release", dependencies=[Depends(owned_exercise)])
 def release_results(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     exercise = _load_exercise(exercise_id)
     submission = _load_submission(exercise_id)
@@ -308,7 +320,7 @@ def release_results(exercise_id: str, user: CurrentUser = Depends(require_teache
     return _teacher_view(exercise_id, exercise)
 
 
-@router.post("/exercises/{exercise_id}/reopen")
+@router.post("/exercises/{exercise_id}/reopen", dependencies=[Depends(owned_exercise)])
 def reopen_submission(exercise_id: str, user: CurrentUser = Depends(require_teacher)) -> dict:
     """Sends a submitted exercise back to the student (FR-15). Audit-logged."""
     exercise = _load_exercise(exercise_id)
@@ -338,9 +350,7 @@ def reopen_submission(exercise_id: str, user: CurrentUser = Depends(require_teac
 
 
 @router.get("/me/exercises", response_model=list[StudentExerciseSummary])
-def my_exercises(user: CurrentUser = Depends(get_current_user)) -> list[StudentExerciseSummary]:
-    if user.role != "student":
-        raise HTTPException(status_code=403, detail="students only")
+def my_exercises(user: CurrentUser = Depends(require_student)) -> list[StudentExerciseSummary]:
     docs = (
         get_db()
         .collection("exercises")
@@ -358,7 +368,7 @@ def my_exercises(user: CurrentUser = Depends(get_current_user)) -> list[StudentE
     ]
 
 
-@router.get("/exercises/{exercise_id}")
+@router.get("/exercises/{exercise_id}", dependencies=[Depends(exercise_for_caller)])
 def get_exercise(exercise_id: str, user: CurrentUser = Depends(get_current_user)) -> dict:
     if user.role == "teacher":
         return _teacher_view(exercise_id, _load_exercise(exercise_id))
@@ -368,12 +378,9 @@ def get_exercise(exercise_id: str, user: CurrentUser = Depends(get_current_user)
     return view.model_dump(mode="json", exclude_none=True)
 
 
-@router.put("/exercises/{exercise_id}/answers")
-def save_answers(exercise_id: str, body: AnswersBody, user: CurrentUser = Depends(get_current_user)) -> dict:
+@router.put("/exercises/{exercise_id}/answers", dependencies=[Depends(students_exercise)])
+def save_answers(exercise_id: str, body: AnswersBody, user: CurrentUser = Depends(require_student)) -> dict:
     """Autosave (FR-13). Replaces the saved response with the one sent."""
-    if user.role != "student":
-        raise HTTPException(status_code=403, detail="students only")
-    load_for_student(exercise_id, user)
     update_open_submission(
         exercise_id,
         check=lambda: _check_answer_shapes(body.answers),
@@ -382,13 +389,10 @@ def save_answers(exercise_id: str, body: AnswersBody, user: CurrentUser = Depend
     return {"status": "saved"}
 
 
-@router.post("/exercises/{exercise_id}/submit")
-def submit_answers(exercise_id: str, body: AnswersBody, user: CurrentUser = Depends(get_current_user)) -> dict:
+@router.post("/exercises/{exercise_id}/submit", dependencies=[Depends(students_exercise)])
+def submit_answers(exercise_id: str, body: AnswersBody, user: CurrentUser = Depends(require_student)) -> dict:
     """Final submit (FR-15/FR-16). Takes the response once more so nothing
     typed after the last autosave is lost, then locks it for scrubbing."""
-    if user.role != "student":
-        raise HTTPException(status_code=403, detail="students only")
-    load_for_student(exercise_id, user)
     update_open_submission(
         exercise_id,
         check=lambda: _check_answer_shapes(body.answers),

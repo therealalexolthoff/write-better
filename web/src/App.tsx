@@ -7,7 +7,9 @@ import Login from "./Login";
 import TeacherApp from "./teacher/TeacherApp";
 import StudentApp from "./student/StudentApp";
 
-type Session = { role: "teacher" | "student" | "unknown" } | null;
+type Role = "admin" | "teacher" | "student" | "unknown";
+type Session = { role: Role } | null;
+const ROLES: Role[] = ["admin", "teacher", "student"];
 
 export default function App() {
   const [session, setSession] = useState<Session | undefined>(undefined);
@@ -20,7 +22,7 @@ export default function App() {
         unsubscribe = onIdTokenChanged(auth, async (user) => {
           if (!user) return setSession(null);
           const { claims } = await user.getIdTokenResult();
-          const role = claims.role === "teacher" || claims.role === "student" ? claims.role : "unknown";
+          const role = ROLES.includes(claims.role as Role) ? (claims.role as Role) : "unknown";
           setSession({ role });
         });
       })
@@ -40,6 +42,9 @@ export default function App() {
       </header>
       {session.role === "teacher" && <TeacherApp />}
       {session.role === "student" && <StudentApp />}
+      {session.role === "admin" && (
+        <main className="page"><p className="notice">You're signed in as the admin. The admin screens are on their way.</p></main>
+      )}
       {session.role === "unknown" && (
         <main className="page"><p className="error">This account isn't set up yet. Ask your teacher.</p></main>
       )}

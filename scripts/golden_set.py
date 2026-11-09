@@ -75,7 +75,7 @@ def run_passage(passage: dict) -> dict:
         prompt=passage["prompt"],
         text=passage["text"],
     )
-    result, job_id = call_harness("evaluate_writing", req)
+    result, job_id = call_harness("evaluate_writing", req, teacher_id="golden-set")
     gold = _offsets(passage["annotations"], passage["text"])
     ai = _offsets([a.model_dump(mode="json") for a in result.annotations], passage["text"])
     matched = gold.keys() & ai.keys()
@@ -100,7 +100,7 @@ def run_transcription(sample: dict, set_dir: Path) -> dict:
 
     pages = [base64.b64encode((set_dir / image).read_bytes()).decode("ascii") for image in sample["images"]]
     req = TranscribeRequest(student_id="golden-set", request_id=str(uuid.uuid4()), prompt_version=PROMPT_VERSION, pages=pages)
-    result, job_id = call_harness("transcribe", req)
+    result, job_id = call_harness("transcribe", req, teacher_id="golden-set")
     got = "\n\n".join(p.text for p in result.pages).strip()
     return {"id": sample["id"], "job_id": job_id, "exact": got == sample["expected"].strip(), "got": got}
 
