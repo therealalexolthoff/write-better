@@ -10,7 +10,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: Object.fromEntries(
-      ["/config", "/students", "/exercises", "/me", "/taxonomy", "/lessons", "/overview"].map((p) => [p, api]),
+      // API paths only: pages like /app and /sign-in are served by Vite.
+      ["/config", "/students", "/exercises", "/me/", "/taxonomy", "/overview"].map((p) => [p, api]),
     ),
   },
 });

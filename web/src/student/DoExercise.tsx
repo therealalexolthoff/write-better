@@ -327,13 +327,13 @@ function WritingResults({ exercise, onRevised }: { exercise: StudentExercise; on
     <>
       <div className="item">
         <p className="instruction">{exercise.prompt}</p>
+        {exercise.comment && <p className="explanation">{exercise.comment}</p>}
+        <Legend spans={spans} />
         {exercise.state === "revision_open" ? (
           <Reviser exercise={exercise} onSubmitted={onRevised} />
         ) : (
           <SpannedText text={text} spans={spans} />
         )}
-        <Legend spans={spans} />
-        {exercise.comment && <p className="explanation">{exercise.comment}</p>}
       </div>
       {exercise.state === "revision_submitted" && (
         <div className="item">

@@ -41,7 +41,7 @@ export default function TeacherApp() {
       <div className="row spread">
         <h1>{student ? student.username : "Class overview"}</h1>
         <div className="row">
-          <button onClick={() => { setShowWriting(!showWriting); setMessage(""); }}>
+          <button className={showWriting ? "" : "primary"} onClick={() => { setShowWriting(!showWriting); setMessage(""); }}>
             {showWriting ? "Close writing form" : "Assign writing"}
           </button>
           <button onClick={() => setShowStudents(!showStudents)}>{showStudents ? "Hide students" : "Manage students"}</button>

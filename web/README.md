@@ -14,3 +14,24 @@ Needs Node 20.19+ (or 22.12+). Three terminals from the repo root:
 
 Sign-in uses the real Identity Platform project (there is no local auth
 emulator in this setup).
+
+## Screen preview (design work, no sign-in needed)
+
+`npm run dev`, then open http://localhost:5173/preview.html. It lists every
+screen, shown with made-up sample data: no API, database or sign-in needed.
+Add `&width=390` to see a screen at phone width. The preview is
+development-only (`src/preview/`, `preview.html`): it is never built into
+`web/dist` or served by the API.
+
+## Pages
+
+`src/router.tsx` maps the address bar to a page: `/` home, `/privacy`,
+`/sign-in`, and `/app` (the signed-in app). The API serves `index.html` for
+each of these (`PAGES` in `api/app/main.py`; a test keeps the two lists in
+step).
+
+## Design system
+
+All styling is in `src/styles.css`: colour tokens at the top (the school's
+burgundy and cyan), then layout, components and pages. Text colours meet
+WCAG AA contrast; the bright cyan is decoration only.

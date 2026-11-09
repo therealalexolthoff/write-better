@@ -60,7 +60,7 @@ function Review({ exercise, onChange }: { exercise: TeacherExercise; onChange: (
     <>
       <h1>{exercise.title}</h1>
       <p>
-        Stage: <strong>{stateLabel(exercise.state)}</strong>
+        <span className="muted">Stage:</span> <span className="stage yours">{stateLabel(exercise.state)}</span>
       </p>
       <WritingReview exercise={exercise} onChange={onChange} />
 

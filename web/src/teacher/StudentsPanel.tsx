@@ -53,21 +53,28 @@ export default function StudentsPanel({ students, onChange }: { students: Studen
   return (
     <section className="panel">
       <h2>Students</h2>
-      <table>
-        <tbody>
-          {students.map((s) => (
-            <tr key={s.student_id}>
-              <td>{s.username}</td>
-              <td>{s.active ? "Active" : "Deactivated"}</td>
-              <td className="actions">
-                {s.active && <button onClick={() => resetPassword(s)}>Reset password</button>}
-                {s.active && <button onClick={() => deactivate(s)}>Deactivate</button>}
-                <button onClick={() => { setDeleting(s); setTyped(""); setMessage(""); }}>Delete…</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {students.length === 0 ? (
+        <p className="muted">No students yet. Add your first one below.</p>
+      ) : (
+        <table className="middle">
+          <thead>
+            <tr><th>Username</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr>
+          </thead>
+          <tbody>
+            {students.map((s) => (
+              <tr key={s.student_id}>
+                <td><strong>{s.username}</strong></td>
+                <td><span className={`badge ${s.active ? "released" : ""}`}>{s.active ? "Active" : "Deactivated"}</span></td>
+                <td className="actions">
+                  {s.active && <button className="small" onClick={() => resetPassword(s)}>Reset password</button>}
+                  {s.active && <button className="small" onClick={() => deactivate(s)}>Deactivate</button>}
+                  <button className="small danger" onClick={() => { setDeleting(s); setTyped(""); setMessage(""); }}>Delete…</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {deleting && (
         <div className="confirm stack">
           <p>
@@ -80,15 +87,26 @@ export default function StudentsPanel({ students, onChange }: { students: Studen
             <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
           </label>
           <div className="row">
-            <button onClick={() => remove(deleting)} disabled={typed !== deleting.username}>Delete permanently</button>
+            <button className="danger" onClick={() => remove(deleting)} disabled={typed !== deleting.username}>Delete permanently</button>
             <button onClick={() => setDeleting(null)}>Cancel</button>
           </div>
         </div>
       )}
-      <form onSubmit={add} className="row">
-        <input placeholder="Agreed name (e.g. Alex)" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        <input placeholder="Password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-        <button>Add student</button>
+      <form onSubmit={add} className="add-form">
+        <h3>Add a student</h3>
+        <div className="row top">
+          <label className="grow">
+            Username
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" required />
+            <span className="hint">First name and initial, for example maria.k. No surnames.</span>
+          </label>
+          <label className="grow">
+            Password
+            <input value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" minLength={8} required />
+            <span className="hint">At least 8 characters. Give it to the student in class.</span>
+          </label>
+        </div>
+        <button className="primary">Add student</button>
       </form>
       {message && <p className="notice">{message}</p>}
     </section>

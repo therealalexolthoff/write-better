@@ -129,6 +129,8 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 
 **Done when:** every page has been checked at phone and laptop widths, and the owner has approved screenshots of each.
 
+**Status (2026-11-09):** colours are the school's (burgundy main colour, cyan accent; see `web/src/styles.css`). The sign-up form, the "check your email" and "waiting for approval" pages and the teacher setup flow are built in Phase 4, together with the logic behind them, using this design system: building them here would mean screens with nothing behind them. Screenshots come from a development-only preview (`web/preview.html`).
+
 ### Phase 4: Admin, sign-up and teacher accounts
 
 **Sign-up requests:**

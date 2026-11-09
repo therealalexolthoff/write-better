@@ -7,6 +7,7 @@ Health checks, the public login config, the routers built phase by phase
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from shared.logs import catch_unexpected_errors
@@ -50,9 +51,19 @@ def public_config() -> dict:
 
 
 # The React app (docs/ARCHITECTURE.md section 2: served from this service).
-# Mounted last so every API route above takes precedence. The app does its
-# own screen switching without URL paths, so "/" is the only page it needs.
-# In local dev the folder doesn't exist and Vite's dev server is used instead.
+# Each page path gets the app's index.html, so a reload or a shared link
+# works; the app then picks the page (web/src/router.tsx - keep PAGES in
+# step with PATHS there). Only these exact paths: an unknown API path still
+# answers 404. Static files are mounted last so every API route above takes
+# precedence. In local dev the folder doesn't exist and Vite's dev server
+# is used instead.
+PAGES = ("/privacy", "/sign-in", "/app")  # "/" is served by the static mount
 _WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 if _WEB_DIST.is_dir():
+
+    def _index() -> FileResponse:
+        return FileResponse(_WEB_DIST / "index.html")
+
+    for _page in PAGES:
+        app.add_api_route(_page, _index, methods=["GET"], include_in_schema=False)
     app.mount("/", StaticFiles(directory=_WEB_DIST, html=True), name="web")
