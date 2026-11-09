@@ -29,8 +29,10 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-PROJECT = "esl-grammar-tool"
-HARNESS_URL = "https://esl-harness-791534784230.us-east4.run.app"
+PROJECT = "write-better-app"
+# The deployed harness URL. Fill in after the first deploy
+# (gcloud run services describe wb-harness --region=us-east4 --format="value(status.url)").
+HARNESS_URL = ""
 ROOT = Path(__file__).resolve().parents[1]
 
 

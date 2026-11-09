@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time GCP project setup for the ESL Grammar & Writing Tool.
+# One-time GCP project setup for Write Better.
 #
 # You run this yourself, step by step - it is not run automatically by
 # anything, and nobody with access to this repo has run it for you. Most
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 # ---- fill these in before running ----
-PROJECT_ID="esl-grammar-tool"
+PROJECT_ID="write-better-app"
 BILLING_ACCOUNT_ID="<billing account id>"
 REGION="us-east4"                 # Cloud Run / Firestore / Storage region (US East, per docs/ARCHITECTURE.md)
 # Identity Platform's browser API key (Console: Identity Platform > Application
@@ -27,13 +27,17 @@ FIREBASE_API_KEY="${FIREBASE_API_KEY:?set FIREBASE_API_KEY in the environment be
 # ---------------------------------------
 
 BUCKET_NAME="${PROJECT_ID}-photos"
-API_SA="esl-api-sa@${PROJECT_ID}.iam.gserviceaccount.com"
-HARNESS_SA="esl-harness-sa@${PROJECT_ID}.iam.gserviceaccount.com"
-ARTIFACT_REPO="${REGION}-docker.pkg.dev/${PROJECT_ID}/esl-images"
+API_SA="wb-api-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+HARNESS_SA="wb-harness-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+ARTIFACT_REPO="${REGION}-docker.pkg.dev/${PROJECT_ID}/wb-images"
 
 echo "== Project =="
-gcloud projects create "${PROJECT_ID}" --name="ESL Grammar Tool"
-gcloud billing projects link "${PROJECT_ID}" --billing-account="${BILLING_ACCOUNT_ID}"
+# Skipped when the project already exists (write-better-app was created and
+# linked to billing on 2026-11-09, with a $20 budget alerting at 50/75/100%).
+if ! gcloud projects describe "${PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud projects create "${PROJECT_ID}" --name="Write Better"
+  gcloud billing projects link "${PROJECT_ID}" --billing-account="${BILLING_ACCOUNT_ID}"
+fi
 gcloud config set project "${PROJECT_ID}"
 
 echo "== APIs =="
@@ -63,8 +67,8 @@ gcloud storage buckets create "gs://${BUCKET_NAME}" \
   --public-access-prevention
 
 echo "== Service accounts =="
-gcloud iam service-accounts create esl-api-sa --display-name="ESL Tool API service account"
-gcloud iam service-accounts create esl-harness-sa --display-name="ESL Tool harness service account"
+gcloud iam service-accounts create wb-api-sa --display-name="Write Better API service account"
+gcloud iam service-accounts create wb-harness-sa --display-name="Write Better harness service account"
 
 echo "== API service account roles =="
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
@@ -83,40 +87,40 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${HARNESS_SA}" --role="roles/aiplatform.user"
 
 echo "== Container registry =="
-gcloud artifacts repositories create esl-images \
+gcloud artifacts repositories create wb-images \
   --repository-format=docker \
   --location="${REGION}"
 
 echo "== Build and deploy the harness (private - no public access) =="
 gcloud builds submit --config=infra/cloudbuild.yaml \
-  --substitutions="_DOCKERFILE=harness/Dockerfile,_IMAGE=${ARTIFACT_REPO}/esl-harness:latest" .
-gcloud run deploy esl-harness \
-  --image="${ARTIFACT_REPO}/esl-harness:latest" \
+  --substitutions="_DOCKERFILE=harness/Dockerfile,_IMAGE=${ARTIFACT_REPO}/wb-harness:latest" .
+gcloud run deploy wb-harness \
+  --image="${ARTIFACT_REPO}/wb-harness:latest" \
   --region="${REGION}" \
   --service-account="${HARNESS_SA}" \
   --no-allow-unauthenticated \
   --set-env-vars="VERTEX_PROJECT_ID=${PROJECT_ID},VERTEX_REGION=us,HARNESS_MOCK_MODE=false"
 
-HARNESS_URL="$(gcloud run services describe esl-harness --region="${REGION}" --format='value(status.url)')"
+HARNESS_URL="$(gcloud run services describe wb-harness --region="${REGION}" --format='value(status.url)')"
 
 echo "== Build and deploy the API (public - the only thing anyone talks to) =="
 gcloud builds submit --config=infra/cloudbuild.yaml \
-  --substitutions="_DOCKERFILE=api/Dockerfile,_IMAGE=${ARTIFACT_REPO}/esl-api:latest" .
-gcloud run deploy esl-api \
-  --image="${ARTIFACT_REPO}/esl-api:latest" \
+  --substitutions="_DOCKERFILE=api/Dockerfile,_IMAGE=${ARTIFACT_REPO}/wb-api:latest" .
+gcloud run deploy wb-api \
+  --image="${ARTIFACT_REPO}/wb-api:latest" \
   --region="${REGION}" \
   --service-account="${API_SA}" \
   --allow-unauthenticated \
   --set-env-vars="HARNESS_URL=${HARNESS_URL},ENVIRONMENT=prod,FIREBASE_API_KEY=${FIREBASE_API_KEY},FIREBASE_AUTH_DOMAIN=${PROJECT_ID}.firebaseapp.com,PHOTO_BUCKET=${BUCKET_NAME}"
 
 echo "== Let the API invoke the harness privately =="
-gcloud run services add-iam-policy-binding esl-harness \
+gcloud run services add-iam-policy-binding wb-harness \
   --region="${REGION}" \
   --member="serviceAccount:${API_SA}" \
   --role="roles/run.invoker"
 
 echo "== Verify: Phase 1 'done when' check =="
-API_URL="$(gcloud run services describe esl-api --region="${REGION}" --format='value(status.url)')"
+API_URL="$(gcloud run services describe wb-api --region="${REGION}" --format='value(status.url)')"
 curl -sf "${API_URL}/health" && echo " <- API health OK"
 curl -sf "${API_URL}/health/harness" && echo " <- API reached the harness privately: OK"
 

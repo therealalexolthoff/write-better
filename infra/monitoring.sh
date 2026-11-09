@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Monitoring alerts (docs/ARCHITECTURE.md section 8), emailed to the
-# teacher. Each matches a structured log line the services write (see
+# admin. Each matches a structured log line the services write (see
 # shared/logs.py) - ids and error types only, never student text.
 #
 #   1. An AI call failed (error, timeout, or output that didn't validate).
@@ -13,9 +13,9 @@
 # Usage: ALERT_EMAIL=you@example.com ./infra/monitoring.sh
 set -euo pipefail
 
-PROJECT_ID="esl-grammar-tool"
+PROJECT_ID="write-better-app"
 : "${ALERT_EMAIL:?set ALERT_EMAIL}"
-CHANNEL_NAME="Teacher email"
+CHANNEL_NAME="Admin email"
 
 CHANNEL="$(gcloud alpha monitoring channels list --project="$PROJECT_ID" \
   --filter="displayName=\"$CHANNEL_NAME\"" --format="value(name)")"

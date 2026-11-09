@@ -29,7 +29,7 @@ It creates the project, enables the required APIs, creates Firestore (native mod
 
 - **Identity Platform**: Console > Identity Platform > Get Started. Enable the Email/Password provider. Enable TOTP MFA (Settings > Multi-factor authentication). The teacher's account needs a verified email before they can enroll in MFA (see docs/REQUIREMENTS.md FR-2).
 - **Teacher role**: the API refuses tokens without a role claim. After creating the teacher account and enrolling TOTP, run `GOOGLE_CLOUD_PROJECT=<project id> python infra/set_teacher_role.py <teacher email>` (prints the account's current state; only writes if the role is missing).
-- **Billing alerts**: Console > Billing > Budgets & alerts. Set alerts at $10 and $15 (see docs/REQUIREMENTS.md section 5 - these are a backstop behind the app's own spend cap, not the primary control).
+- **Billing alerts**: done for `write-better-app` (see status below). For a new project: Console > Billing > Budgets & alerts, alerts at $10 and $15. These are a backstop behind the app's own spend cap, not the primary control.
 
 ## 4. Hardening (Phase 8) - re-runnable
 
@@ -45,14 +45,16 @@ See docs/SECURITY_REVIEW.md for what these protect and how it was checked.
 - Deleting resources this script created is not covered here; do that by hand and deliberately.
 - After granting a Cloud Run IAM invoker binding, allow up to ~60 seconds for it to propagate before the private-invoke health check succeeds - a 403 right after granting the role isn't a misconfiguration, just propagation lag.
 
-## Done (2026-10-08)
+## Write Better project status
 
-Ran against project `esl-grammar-tool`, region `us-east4`, billing account `<billing account id>`. Both services are deployed and verified:
-- `esl-harness` (private): `roles/run.invoker` granted only to `esl-api-sa`.
-- `esl-api` (public): `GET /health` and `GET /health/harness` both return 200.
-- Identity Platform initialized, Email/Password + optional TOTP MFA enabled, teacher account created and MFA-enrolled - all via API, no console needed.
-- Billing budget created ($20 cap, alerts at 50%/75%), scoped to this project only.
-- Real Claude wiring (harness real mode) deployed and code-path verified end to end (prompt construction, Vertex auth, structured-output parsing, error handling) - **but the actual live call 429'd on Vertex quota**, not a code issue. See "Still outstanding" below.
+Project `write-better-app` (number 1046905375357), region `us-east4`, created 2026-11-09 in the owner's Google Cloud organization.
 
-Still outstanding:
-- **Vertex AI serving quota for `anthropic-claude-sonnet` is 0** - confirmed via `gcloud alpha services quota list`, confirmed no self-service bump is possible. A real quota-increase request is submitted via Console (see above) and awaiting review as of 2026-10-08. The harness runs in real mode (`HARNESS_MOCK_MODE=false`). While Claude's quota is 0, every call falls back automatically to Gemini 3.8 Flash on the same `us` endpoint (docs/HARNESS_SPEC.md section 8); once the quota clears, Claude answers again with no redeploy. Vertex's in-memory data cache for Gemini is disabled for the project (`cacheConfig.disableCache=true`, set 2026-10-08).
+Done:
+- Project created and linked to billing.
+- Budget "Write Better monthly": $20 a month, scoped to this project, alerting billing admins at 50%, 75% and 100% ($10, $15, $20).
+- APIs enabled: Vertex AI, Cloud Billing Budget.
+
+Outstanding:
+- Enable Claude in Vertex AI Model Garden for this project, then request serving quota (section 2). On the previous project the quota for `anthropic-claude-sonnet` started at 0 and had to be requested; expect the same here.
+- Everything else in `setup_gcp.sh` (other APIs, Firestore, bucket, service accounts, deploy) and the manual Identity Platform steps. These run when the app is first deployed, not in Phase 0.
+- Until Claude quota is granted, develop with the harness in mock mode; when deployed, calls fall back to Gemini 3.8 Flash.
