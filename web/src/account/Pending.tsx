@@ -4,7 +4,7 @@
 // it from here.
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api";
-import { authErrorMessage, refreshAccount, resendVerificationEmail } from "../firebase";
+import { authErrorMessage, currentAuth, refreshAccount, resendVerificationEmail } from "../firebase";
 
 type Status = { status: string; email_verified: boolean };
 
@@ -30,6 +30,15 @@ export default function Pending({ email }: { email: string | null }) {
       setMessage(err instanceof ApiError ? err.message : authErrorMessage(err));
     }
     setBusy(false);
+  }
+
+  // A fresh token: once approved it carries the teacher role, and the app
+  // moves on to the account setup by itself. Only still-pending accounts
+  // ask for their status again (an approved one has no request any more).
+  async function checkAgain() {
+    await refreshAccount();
+    const { claims } = await currentAuth().currentUser!.getIdTokenResult();
+    if (!claims.role) await load();
   }
 
   if (status === undefined) return <p className="loading" aria-live="polite">Loading…</p>;
@@ -66,7 +75,7 @@ export default function Pending({ email }: { email: string | null }) {
         </li>
       </ol>
       <div className="row">
-        <button className="primary" disabled={busy} onClick={() => act(async () => { await refreshAccount(); await load(); }, "Checked. Still waiting for approval.")}>
+        <button className="primary" disabled={busy} onClick={() => act(checkAgain, "Checked. Still waiting for approval.")}>
           Check again
         </button>
       </div>

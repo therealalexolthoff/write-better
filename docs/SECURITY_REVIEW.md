@@ -1,29 +1,48 @@
-# Security review (Phase 8, 2026-10-08)
+# Security review (Phase 8, 2026-11-09)
 
-> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+What protects Write Better, how each item was verified, and what's left. Re-check after any change to roles, routes, storage, logging, prompts or the deployment. "Live" means checked against write-better-app with `scripts/live_test.py`, `scripts/browser_test.mjs` or direct requests.
 
-What was checked before the pilot, how, and what's left. Re-check after any change to auth, storage, logging or prompts.
+## Fixed in this review
+
+- **No security headers.** Every response now carries a Content-Security-Policy (scripts only from the app; no other site may frame it), HSTS, `nosniff`, a referrer policy and a permissions policy (`api/app/security_headers.py`). Verified by `api/tests/test_health.py`, live headers, and no policy violations in Chrome on any page or through the whole sign-in journey.
+- **A taken student username crashed the request (500).** It now answers 409 with a plain message (`api/tests/test_students.py`).
+- **Unbounded scaling.** Cloud Run instances are capped (API 3, harness 2), which also caps what a flood of requests can cost.
 
 ## Checked and in place
 
 | Area | How it's protected | How it was verified |
 |---|---|---|
-| No direct client access to Firestore | Deny-all rules (`infra/firestore.rules`, deployed with `infra/deploy_firestore_rules.py`). The API uses a service account, which rules don't apply to. | Before and after deploy: unauthenticated REST reads and writes to `students`/`submissions` return 403. |
-| No direct client access to photos | Private bucket: uniform IAM access, public access prevention **enforced** (was "inherited" until this review), not linked to Firebase Storage. Only the API's service account can read it. | Unauthenticated listing returns 401. |
-| Photos only via short-lived links | `GET /exercises/{id}/photos` returns V4 signed GET links that expire after 15 minutes: every page to the teacher; to a student, only the pages they uploaded to their own open exercise (none after submit, never the teacher's). Photos never appear in any other student response. | `api/tests/test_writing.py`. |
-| Every endpoint checks who is calling | Each route depends on `get_current_user` / `require_teacher`; teacher tokens without TOTP are refused. | `api/tests/test_every_route_needs_login.py` walks every published endpoint and expects 401 with no login. |
-| Students see only their own released work | Ownership checks return 404 for other students' ids; student views are serialized through models that have no field for teacher-only data. | `test_exercises.py`, `test_review.py`, `test_writing.py`, `test_profile_lessons.py`. |
-| No student text in logs | Only `shared/logs.py` events are logged (ids, counts, error **types**). A middleware in both services turns any unexpected error into a plain 500 and logs only its type and path. **Fixed in this review:** before, an AI result that failed validation twice crashed the harness, and the server logged the full traceback, which can quote student text. | `api/tests/test_safe_logging.py`. |
-| Prompt injection | Student text and teacher notes go inside `<data>` blocks that the system prompt says are never instructions. **Added in this review:** any `<data`/`</data` the text contains is defanged, so a student can't close the block early. Output is forced into a JSON schema and validated twice (harness and API), so injected text can at worst produce wrong annotations for the teacher to see. | `harness/tests/test_operations.py`; golden passage `g9-prompt-injection` against the live model. |
-| Spend cap | Checked before every AI call (including the golden set runner); alert email at 75% and at the cap; Google billing alerts at $10 / $15. | `test_jobs_spend_settings.py`, `test_review.py`. |
-| Alerts | Email to the teacher for failed AI calls, server errors, and spend (`infra/monitoring.sh`). | Policies created 2026-10-08. |
-| Backups | Daily Firestore backups, 7-day retention. | `gcloud firestore backups schedules list`. |
-| Student deletion | Deletes photos, exercises, submissions, lessons, job records, the login, then the student record; re-runnable if interrupted. The screen requires typing the username and explains backups expire within 7 days. | `api/tests/test_delete_student.py`. |
+| Every endpoint checks who is calling | Each route depends on a role check; tokens are verified with revocation checks, so disabled accounts are refused at once. | `test_every_route_needs_login.py` walks every published endpoint. Live: no login → 401. |
+| Teachers kept separate | Every class, assignment, student, exercise, submission and job record carries `teacher_id`. Ownership checks (`api/app/access.py`) run before a route reads its request; another teacher's record answers "not found". | `test_teacher_isolation.py` walks every endpoint as another teacher, the admin, another teacher's student and another student, checking status, unchanged data and no leaks. Removing a check on purpose was caught each time (Phases 2, 5, 6). Live: a second teacher got 404 on the first teacher's student, exercise, assignment, class overview and photos, and empty lists. |
+| The admin never reaches student work | Admin routes return account details, counts and dollars only; every student-work route refuses the admin. | Isolation walk; `test_admin.py`, `test_spending.py`. Live: 403. |
+| Admin routes are admin-only | `/admin` routes require the admin role and the authenticator code. | Isolation walk as teachers and students. |
+| Authenticator code for admin and teachers | Enforced by the API from the token's second-factor claim, not just the sign-in screen. Emails must be verified before an authenticator can be added. | Tests; live: an approved teacher with no authenticator is refused; the browser journey enrolls via the QR/key and signs in with a code. |
+| Pending sign-ups reach nothing | A login with no role reaches only its own sign-up request and status. | Isolation test; live 401. |
+| Sign-up abuse | The email comes from the verified token, never the form (extra fields are refused); a hidden bot field; a daily limit of 20; Identity Platform's own limits; an alert email per sign-up; nothing works until the admin approves. | `test_signup.py`. Live: sign-up and approval. |
+| Passwords | Go only to Identity Platform (browser SDK or REST); the API never receives, stores or logs them. Admin-created teachers and the admin set theirs from a one-time link. | Code review; `test_signup.py` checks nothing password-like is stored. |
+| Sign-in key | Limited to the two sign-in services and to the app's address. | Live: the key used from another site is refused (403). |
+| No direct client access to Firestore | Deny-all rules; the API uses a service account. | Live: unauthenticated REST read → 403. |
+| Photos | Private bucket with uniform access and public access prevention; only the API's service account has access, to that bucket only. Viewed only through 15-minute signed links: the teacher sees every page, a student only their own while the work is open. Metadata is stripped twice. | `test_writing.py`. Live: bucket listing → 401; a student's photo link works; after the student is deleted the link no longer does. |
+| The AI service is private | Only the API's service account may call it. | Live: direct request → 403. |
+| Students see only their own released work | Student views are built from models with no teacher-only fields; the error view counts released work only, and revision marks only once sent back. | `test_exercises.py`, `test_review.py`, `test_writing.py`, `test_profile.py`, `test_teacher_isolation.py`. Live: the student saw their spans and no corrections. |
+| No student text in logs | Only id/count/type events are logged; unexpected errors log their type and path only. | `test_safe_logging.py`. |
+| Prompt injection | Student text goes inside `<data>` blocks the prompt says are never instructions, with any data tags defanged; output is schema-forced and validated in the harness and again in the API. | `harness/tests/test_operations.py`. |
+| Spend | Hard monthly cap checked before every AI call, added atomically; at most $20; 75% alert; Google budget alerts at $10/$15/$20. | `test_spending.py`, `test_harness_ops.py`. Live: the admin's spending showed the test's AI calls. |
+| Deletion | Deleting a student removes photos, exercises, submissions, job records and the login; re-runnable. Backups expire within 7 days. | `test_delete_student.py`. Live. |
+| Audit log | Student lifecycle, reopens, class and assignment changes, and every admin action. | Tests across the suite. |
+| Backups | Daily, kept 7 days. | Created with the setup script. |
 
 ## Known limits (accepted, or for later)
 
-- A signed photo link works for its full 15 minutes even if the teacher logs out.
-- Gemini (the fallback while Claude's quota is pending) may log prompts for Google's abuse monitoring unless an exception is requested (docs/HARNESS_SPEC.md section 8). Prompts contain only scrubbed text and opaque ids.
-- Scrubbing is manual: if the teacher leaves a name in the scrubbed copy, it reaches the AI provider.
-- The audit log has no screen yet; it can be read in the Firestore console.
-- Job records keep the error message of failed AI calls (which can quote scrubbed text) in Firestore; they're deleted with the student.
+- **AI provider while Claude isn't enabled:** every call goes to Gemini, which may keep prompts briefly for abuse monitoring. Prompts contain only scrubbed text and random ids, but handwriting photos go unscrubbed.
+- **Scrubbing is manual.** A name the teacher misses reaches the AI provider. Photos are never scrubbed; students are asked to write only their first name.
+- **Taken emails can be discovered.** Even with enumeration protection on, Identity Platform's sign-up API answers `EMAIL_EXISTS` for a registered email (verified live). The sign-up page shows a neutral message, but someone calling the API directly can tell. Student usernames are unique across the school, so a teacher can tell that a username exists.
+- **The daily sign-up limit can be used up** by someone creating requests, blocking real sign-ups for that day (the admin is emailed for each, and can also create teachers directly).
+- **Authenticator setup window.** Between approval (or an admin resetting a lost authenticator) and the teacher adding their app, the password alone reaches the setup screen, so someone with that password could add their own authenticator. New accounts must verify their email first, which narrows this.
+- A signed photo link works for its full 15 minutes, even after sign-out.
+- The cap can be overshot by a few cents when calls are already running, and the 75% alert can arrive twice.
+- The audit log has no screen; read it in Firestore.
+- Job records of failed AI calls keep the error message (which can quote scrubbed text); they're deleted with the student.
+- The Content-Security-Policy allows inline style attributes (React sets bar widths that way); inline scripts are not allowed.
+- Identity Platform created an unused broad browser key; Firestore's rules make it useless for data access.
+- Not yet measured: the AI's accuracy on real teacher-marked passages (the golden set is still synthetic).

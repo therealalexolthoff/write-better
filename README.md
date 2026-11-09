@@ -4,7 +4,7 @@ A free web app that helps adult language learners write better English. Students
 
 The AI drafts; the teacher decides. Nothing the AI produces reaches a student without the teacher's approval.
 
-> **Status: being built.** Write Better is being rebuilt from a single-teacher app. Phase 1 is done: the app reviews writing only. It still supports just one teacher until Phase 2, and the public pages, admin and classes come in later phases. `docs/BUILD_PLAN.md` lists every phase.
+> **Status: deployed, before its pilot.** All eight build phases are done (`docs/BUILD_PLAN.md`); the AI's accuracy on real teacher-marked passages hasn't been measured yet, and Claude access is pending (Gemini answers until then). Operations: `infra/README.md`. Security: `docs/SECURITY_REVIEW.md`.
 
 ## What it will do
 

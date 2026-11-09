@@ -1,64 +1,59 @@
-# GCP project setup
+# Google Cloud setup and operations
 
-> **Status:** this document still describes the single-teacher app that Write Better was copied from. It is updated in the build phase that changes what it covers (see `docs/BUILD_PLAN.md`). Where they disagree, the build plan wins.
+Write Better runs on one Google Cloud project, `write-better-app` (region `us-east4`). Everything below is done with gcloud and REST calls; nothing needs the Cloud Console except requesting Claude access.
 
-One-time setup for a fresh GCP project. Run in this order.
+## Setting up a project from scratch
 
-## 1. Before running the script
+1. Install the [gcloud CLI](https://cloud.google.com/sdk/docs/install) and run `gcloud auth login` as a project owner. No local Docker: images build with Cloud Build.
+2. Fill in `PROJECT_ID`, `BILLING_ACCOUNT_ID` and `REGION` at the top of `infra/setup_gcp.sh`, read it, and run it section by section. It creates:
+   - Firestore (native mode) with daily backups kept 7 days, and the private photo bucket;
+   - the two service accounts with only the roles they need (the API's storage access is limited to the photo bucket);
+   - Identity Platform: email and password sign-in with sign-up allowed (teachers have no role until the admin approves them), authenticator apps (TOTP), email enumeration protection, and users can't delete themselves from the browser;
+   - the browser's sign-in key, limited to the two sign-in services and to the app's address;
+   - both Cloud Run services: the harness is private (only the API's service account may call it, at most 2 instances), the API is public (at most 3 instances);
+   - the deny-all Firestore rules (`infra/firestore.rules`).
+3. Then:
+   - **Budget** (alerts to billing admins at $10, $15 and $20):
+     `gcloud billing budgets create --billing-account=<id> --display-name="Write Better monthly" --budget-amount=20USD --filter-projects=projects/<project> --calendar-period=month --threshold-rule=percent=0.5 --threshold-rule=percent=0.75 --threshold-rule=percent=1.0`
+   - **Alerts** to the admin (failed AI calls, server errors, AI spend, new teacher sign-ups): `ALERT_EMAIL=<email> ./infra/monitoring.sh`
+   - **Admin account:** `GOOGLE_CLOUD_PROJECT=<project> .venv/bin/python infra/create_admin.py <admin email>`. It prints a one-time link to set the password; then sign in at `/sign-in`, verify the email and add an authenticator app.
+   - **Claude access** (Cloud Console): Vertex AI > Model Garden > Claude Sonnet 5 > Enable, then IAM & Admin > Quotas: request the `anthropic-claude-sonnet` online prediction quota for the `us` multi-region. Access and quota are separate gates, with no fixed approval time. Until both are granted, every AI call falls back to Gemini (docs/HARNESS_SPEC.md section 8).
 
-- Install the [gcloud CLI](https://cloud.google.com/sdk/docs/install). No local Docker needed - images build remotely via Cloud Build (`infra/cloudbuild.yaml`).
-- `gcloud auth login`
-- Pick a globally-unique project ID and find your billing account ID: `gcloud billing accounts list`
-- Open `setup_gcp.sh` and fill in `PROJECT_ID`, `BILLING_ACCOUNT_ID`, and `REGION` at the top.
-- `export FIREBASE_API_KEY=...` - Identity Platform's browser API key (Console: Identity Platform > Application setup details). The login screen needs it; the API hands it out from `GET /config`.
+## Deploying a change
 
-## 2. Run the script
+From the repo root, with tests passing:
 
+```sh
+P=write-better-app; R=us-east4; REPO=$R-docker.pkg.dev/$P/wb-images
+gcloud builds submit --project $P --region $R --config infra/cloudbuild.yaml \
+  --substitutions="_DOCKERFILE=api/Dockerfile,_IMAGE=$REPO/wb-api:latest" .
+gcloud run deploy wb-api --project $P --region $R --image $REPO/wb-api:latest
 ```
-./infra/setup_gcp.sh
-```
 
-It creates the project, enables the required APIs, creates Firestore (native mode, with a 7-day daily backup schedule), a private Cloud Storage bucket, the two service accounts with the roles they need, builds and deploys both Cloud Run services, and wires the API to invoke the harness privately. It ends by curling the API's `/health` and `/health/harness` endpoints to confirm Phase 1's "done when" criteria.
+The same for the harness (`harness/Dockerfile`, `wb-harness`). `gcloud run deploy` with only `--image` keeps the service's settings. The upload skips everything git ignores, including `CLAUDE.local.md`.
 
-**Do this first, in parallel with everything else** - it has no fixed approval time and can block later work if left until last:
+## Live tests (run after a deploy)
 
-- Request Vertex AI Model Garden access for the Claude model (Console: Vertex AI > Model Garden > find the Claude model > Request access). Seen stuck pending for an unpredictable time in 2026 reports.
-- **Model Garden access and serving quota are two separate gates.** Even after access is granted, the actual per-minute request quota for the base model can still be 0, which fails real calls with `429 RESOURCE_EXHAUSTED` (confirmed 2026-10-08 against this project). There is no self-service bump - `gcloud alpha services quota update` caps the consumer override at 0 for this metric. Request the real increase via Console: IAM & Admin > Quotas & System Limits > filter by service "Vertex AI API", search "claude" or "anthropic" > select the `anthropic-claude-sonnet` row (`us_multi_region_online_prediction_requests_per_base_model`) > Edit Quotas > submit with a justification. No fixed SLA observed - start this immediately, same as the access request.
+- `GOOGLE_CLOUD_PROJECT=write-better-app .venv/bin/python scripts/live_test.py <app URL> <a JPEG file>`: the whole path through the API with throwaway accounts and real authenticator codes, including two real AI calls (a few cents), a second teacher's isolation, resetting an authenticator, and deleting a student. 26 checks.
+- `node scripts/browser_test.mjs <app URL>`: a teacher's sign-up, approval, authenticator setup and sign-in through the real pages in headless Chrome, under the live security headers. 9 checks.
 
-## 3. Manual steps (console only - no gcloud command covers these)
+Both delete everything they create, even when a check fails.
 
-- **Identity Platform**: Console > Identity Platform > Get Started.
-  - Enable the Email/Password provider, with **user sign-up allowed** (teachers create their own logins on the sign-up page; they have no role until the admin approves them).
-  - Enable TOTP MFA (Settings > Multi-factor authentication). Emails must be verified before enrolling (docs/REQUIREMENTS.md FR-2).
-  - Turn on **email enumeration protection** (Settings > User actions). [VERIFY] how sign-up behaves with it on: the sign-up page already shows one neutral message for a taken email.
-  - Add the app's domain to **Authorized domains**, and set the email templates' sender name to "Write Better" (verification and password-reset emails come from Identity Platform).
-- **Admin account**: `GOOGLE_CLOUD_PROJECT=<project id> python infra/create_admin.py <admin email>` creates the admin login (asks for a password) or gives an existing one the admin role. Then sign in at `/sign-in`: the app walks you through verifying the email and adding an authenticator app. Teachers are approved, created and managed from the admin screen; there's no script for them.
-- **Billing alerts**: done for `write-better-app` (see status below). For a new project: Console > Billing > Budgets & alerts, alerts at $10 and $15. These are a backstop behind the app's own spend cap, not the primary control.
+## Re-runnable hardening
 
-## 4. Hardening (Phase 8) - re-runnable
-
-- **Firestore rules** (deny all client access): `GOOGLE_CLOUD_PROJECT=<project id> .venv/bin/python infra/deploy_firestore_rules.py`
-- **Alerts** emailed to the admin (failed AI calls, server errors, spend, new teacher sign-ups): `ALERT_EMAIL=<email> ./infra/monitoring.sh`
-- **Golden set** after any prompt or model change: `.venv/bin/python scripts/golden_set.py [set.json]` (the real set lives in `golden/private/`, git-ignored)
-
-See docs/SECURITY_REVIEW.md for what these protect and how it was checked.
+- Firestore rules: `GOOGLE_CLOUD_PROJECT=<project> .venv/bin/python infra/deploy_firestore_rules.py`
+- Alerts: `ALERT_EMAIL=<email> ./infra/monitoring.sh` (existing ones are left alone)
+- After any prompt or model change: `.venv/bin/python scripts/golden_set.py` (real passages go in `golden/private/`, which git ignores)
 
 ## Notes
 
-- `setup_gcp.sh` is idempotent for most steps (safe to re-run), but re-creating the project or billing link will fail loudly if they already exist - that's expected, just skip ahead.
-- Deleting resources this script created is not covered here; do that by hand and deliberately.
-- After granting a Cloud Run IAM invoker binding, allow up to ~60 seconds for it to propagate before the private-invoke health check succeeds - a 403 right after granting the role isn't a misconfiguration, just propagation lag.
+- After granting a Cloud Run invoker role, allow up to a minute before the API can call the harness: a 403 right after granting is propagation, not a mistake.
+- Identity Platform also created a broad "Browser key (auto created by Firebase)". Write Better never uses or publishes it, and Firestore's deny-all rules make it useless for data access.
+- Deleting resources the setup created isn't covered here; do it by hand and deliberately.
 
-## Write Better project status
+## write-better-app status (2026-11-09)
 
-Project `write-better-app` (number 1046905375357), region `us-east4`, created 2026-11-09 in the owner's Google Cloud organization.
-
-Done:
-- Project created and linked to billing.
-- Budget "Write Better monthly": $20 a month, scoped to this project, alerting billing admins at 50%, 75% and 100% ($10, $15, $20).
-- APIs enabled: Vertex AI, Cloud Billing Budget.
-
-Outstanding:
-- Enable Claude in Vertex AI Model Garden for this project, then request serving quota (section 2). On the previous project the quota for `anthropic-claude-sonnet` started at 0 and had to be requested; expect the same here.
-- Everything else in `setup_gcp.sh` (other APIs, Firestore, bucket, service accounts, deploy) and the manual Identity Platform steps. These run when the app is first deployed, not in Phase 0.
-- Until Claude quota is granted, develop with the harness in mock mode; when deployed, calls fall back to Gemini 3.8 Flash.
+- App: https://wb-api-1046905375357.us-east4.run.app (no custom domain yet).
+- Deployed and checked: both services, Firestore with backups, the photo bucket, Identity Platform, the restricted sign-in key, the deny-all rules, the $20 budget, and four alert policies to alex.olthoff@tuta.com. Both live tests pass.
+- Claude: not enabled yet (calls return 429), so AI calls use Gemini.
+- A custom domain later means adding it to Identity Platform's authorized domains and the sign-in key's allowed referrers.

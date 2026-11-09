@@ -199,6 +199,8 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 - Deploy and run a full live test with a test admin, two test teachers and test students. Include a check that the two teachers can't see each other's work.
 - Pilot with one or two teachers before opening sign-up to the rest.
 
+**Status (2026-11-09):** done except the golden set (postponed by the owner) and the pilot. Security review redone (`docs/SECURITY_REVIEW.md`): security headers added, a taken username no longer crashes, instance limits set. Deployed to write-better-app with `infra/setup_gcp.sh` (now fully scripted, Identity Platform included) and checked live: `scripts/live_test.py` (26 checks, including real AI through the Gemini fallback, a second teacher's isolation, resetting an authenticator, deleting a student) and `scripts/browser_test.mjs` (the real sign-up, setup and sign-in pages; 9 checks). Students are told on the writing screen that AI helps their teacher.
+
 ## Main risks
 
 - **A missed ownership check** would expose another teacher's students. The Phase 2 tests are the protection.
