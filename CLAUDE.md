@@ -22,7 +22,8 @@ Python 3.12 + FastAPI + Pydantic for the API and the AI service ("harness"), two
 - Clients never access Firestore or Storage directly; all authorization is server-side in the API.
 - A teacher only ever reaches their own classes, students and work. Another teacher's records answer "not found".
 - The admin manages accounts and spending, and never reaches student work or teacher notes.
-- A signed-in account with no role (a pending teacher sign-up) reaches nothing except its sign-up status.
+- A signed-in account with no role (a pending teacher sign-up) reaches nothing except its own sign-up request and status (`api/app/signup.py`).
+- Only the admin reaches `/admin` routes. They return account details and counts, never student records or writing.
 - Students see only their own work, and only after the teacher releases it. That includes the student error view.
 - Passwords go only to Identity Platform; the API never stores or logs them.
 - Original student text is never modified; only the teacher-edited scrubbed copy is sent to the harness.

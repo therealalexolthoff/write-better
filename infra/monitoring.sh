@@ -6,6 +6,7 @@
 #   1. An AI call failed (error, timeout, or output that didn't validate).
 #   2. A server error: any 5xx response, or an unexpected error in either service.
 #   3. AI spend passed 75% of the monthly cap, or reached it.
+#   4. A teacher signed up and is waiting for approval.
 #
 # At most one email per alert per hour. Safe to re-run: existing channels
 # and policies (matched by display name) are left alone.
@@ -52,14 +53,18 @@ PY
   echo "created: $name"
 }
 
-create_alert "ESL: AI call failed" \
+create_alert "Write Better: AI call failed" \
   'resource.type="cloud_run_revision" AND jsonPayload.event="harness_call_failed"' \
   "An AI call failed. The work is not lost: the teacher can retry it. If this repeats, check the jobs collection in Firestore for the error."
 
-create_alert "ESL: server error" \
+create_alert "Write Better: server error" \
   'resource.type="cloud_run_revision" AND (httpRequest.status>=500 OR jsonPayload.event="unhandled_error")' \
   "The API or the harness returned a server error. Check Cloud Run logs for the service and path named in the log entry."
 
-create_alert "ESL: AI spend" \
+create_alert "Write Better: AI spend" \
   'resource.type="cloud_run_revision" AND jsonPayload.event=("spend_threshold" OR "spend_cap_reached")' \
-  "This month's AI spend has passed 75% of the cap, or reached it (generation and evaluation then pause until next month or until the cap setting is raised)."
+  "This month's AI spend has passed 75% of the cap, or reached it (AI evaluation and transcription then pause until next month or until the cap setting is raised)."
+
+create_alert "Write Better: new teacher sign-up" \
+  'resource.type="cloud_run_revision" AND jsonPayload.event="signup_requested"' \
+  "A teacher has signed up and is waiting for approval. Sign in to Write Better as the admin to approve or reject them. Requests not handled within 30 days are deleted."

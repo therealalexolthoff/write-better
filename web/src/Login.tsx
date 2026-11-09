@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import type { MultiFactorResolver } from "firebase/auth";
 import { studentSignIn, teacherCodeStep, teacherPasswordStep } from "./firebase";
 import { PublicLayout } from "./Layout";
+import { Link, PATHS } from "./router";
 
 type Mode = "student" | "staff";
 
@@ -16,6 +17,9 @@ export default function Login() {
       <div className="auth-page">
         <section className="auth-card" aria-labelledby="sign-in-title">
           <h1 id="sign-in-title">Sign in</h1>
+          {new URLSearchParams(window.location.search).has("ready") && (
+            <p className="notice">Your account is set up. Sign in with your email, password and the code from your app.</p>
+          )}
           <div className="segmented" role="tablist" aria-label="Who is signing in">
             <button role="tab" aria-selected={mode === "staff"} className={mode === "staff" ? "active" : ""} onClick={() => setMode("staff")}>
               Teacher or admin
@@ -31,6 +35,11 @@ export default function Login() {
             ? "Forgot your password? Ask your teacher to reset it."
             : "Forgot your password or lost your authenticator app? Ask the Write Better administrator."}
         </p>
+        {mode === "staff" && (
+          <p className="auth-help">
+            New teacher? <Link to={PATHS.signUp}>Sign up</Link>
+          </p>
+        )}
       </div>
     </PublicLayout>
   );

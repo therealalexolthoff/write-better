@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     proxy: Object.fromEntries(
       // API paths only: pages like /app and /sign-in are served by Vite.
-      ["/config", "/students", "/exercises", "/me/", "/taxonomy", "/overview"].map((p) => [p, api]),
+      ["/config", "/students", "/exercises", "/me/", "/taxonomy", "/overview", "/signup", "/admin"].map((p) => [p, api]),
     ),
   },
 });

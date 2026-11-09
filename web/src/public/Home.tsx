@@ -53,10 +53,13 @@ export default function Home() {
             and edit every suggestion before they see it, and they correct their own mistakes.
           </p>
           <div className="row">
-            <Link to={PATHS.signIn} className="button primary large">Sign in</Link>
-            <a href="#how-it-works" className="button large">How it works</a>
+            <Link to={PATHS.signUp} className="button primary large">Sign up as a teacher</Link>
+            <Link to={PATHS.signIn} className="button large">Sign in</Link>
           </div>
-          <p className="hero-note muted">Free to use. Students: sign in with the username your teacher gave you.</p>
+          <p className="hero-note muted">
+            Free to use. <a href="#how-it-works">See how it works</a>. Students: sign in with the username your teacher
+            gave you.
+          </p>
         </div>
       </section>
 

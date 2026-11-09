@@ -27,14 +27,18 @@ It creates the project, enables the required APIs, creates Firestore (native mod
 
 ## 3. Manual steps (console only - no gcloud command covers these)
 
-- **Identity Platform**: Console > Identity Platform > Get Started. Enable the Email/Password provider. Enable TOTP MFA (Settings > Multi-factor authentication). The teacher's account needs a verified email before they can enroll in MFA (see docs/REQUIREMENTS.md FR-2).
-- **Teacher role**: the API refuses tokens without a role claim. After creating the teacher account and enrolling TOTP, run `GOOGLE_CLOUD_PROJECT=<project id> python infra/set_teacher_role.py <teacher email>` (prints the account's current state; only writes if the role is missing).
+- **Identity Platform**: Console > Identity Platform > Get Started.
+  - Enable the Email/Password provider, with **user sign-up allowed** (teachers create their own logins on the sign-up page; they have no role until the admin approves them).
+  - Enable TOTP MFA (Settings > Multi-factor authentication). Emails must be verified before enrolling (docs/REQUIREMENTS.md FR-2).
+  - Turn on **email enumeration protection** (Settings > User actions). [VERIFY] how sign-up behaves with it on: the sign-up page already shows one neutral message for a taken email.
+  - Add the app's domain to **Authorized domains**, and set the email templates' sender name to "Write Better" (verification and password-reset emails come from Identity Platform).
+- **Admin account**: `GOOGLE_CLOUD_PROJECT=<project id> python infra/create_admin.py <admin email>` creates the admin login (asks for a password) or gives an existing one the admin role. Then sign in at `/sign-in`: the app walks you through verifying the email and adding an authenticator app. Teachers are approved, created and managed from the admin screen; there's no script for them.
 - **Billing alerts**: done for `write-better-app` (see status below). For a new project: Console > Billing > Budgets & alerts, alerts at $10 and $15. These are a backstop behind the app's own spend cap, not the primary control.
 
 ## 4. Hardening (Phase 8) - re-runnable
 
 - **Firestore rules** (deny all client access): `GOOGLE_CLOUD_PROJECT=<project id> .venv/bin/python infra/deploy_firestore_rules.py`
-- **Alerts** emailed to the teacher (failed AI calls, server errors, spend): `ALERT_EMAIL=<email> ./infra/monitoring.sh`
+- **Alerts** emailed to the admin (failed AI calls, server errors, spend, new teacher sign-ups): `ALERT_EMAIL=<email> ./infra/monitoring.sh`
 - **Golden set** after any prompt or model change: `.venv/bin/python scripts/golden_set.py [set.json]` (the real set lives in `golden/private/`, git-ignored)
 
 See docs/SECURITY_REVIEW.md for what these protect and how it was checked.

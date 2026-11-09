@@ -1,12 +1,17 @@
-"""Identity Platform access: student user lifecycle and ID token verification.
+"""Identity Platform access: account lifecycle, roles and ID token verification.
 
 Wraps firebase_admin so the rest of the API never imports it directly -
 that makes it simple to monkeypatch in tests (see api/tests/conftest.py)
 instead of needing live Identity Platform credentials to run the suite.
 
-The teacher's own account (email + password + TOTP) is created once by
-hand in the Identity Platform console during setup, not through this API -
-see docs/REQUIREMENTS.md FR-1/FR-2 (no self-signup for anyone).
+Accounts:
+- Students are created by their teacher (students.py), with a synthetic
+  email and a teacher-set password.
+- Teachers sign up themselves in the browser (Identity Platform creates
+  the login), or the admin creates them (admin.py). Either way they have
+  no role until the admin approves them.
+- The admin account is set up once with infra/create_admin.py.
+The role is a custom claim: "admin", "teacher" or "student" (auth.py).
 """
 
 import firebase_admin
@@ -45,6 +50,55 @@ def create_student_user(username: str, password: str) -> str:
 def set_student_claims(uid: str, student_id: str) -> None:
     _get_app()
     fb_auth.set_custom_user_claims(uid, {"role": "student", "student_id": student_id})
+
+
+def set_role(uid: str, role: str) -> None:
+    """Gives an admin or teacher account its role. The user's next token
+    refresh (at most an hour, or at once when the app asks) carries it."""
+    _get_app()
+    fb_auth.set_custom_user_claims(uid, {"role": role})
+
+
+def email_verified(uid: str) -> bool:
+    _get_app()
+    return fb_auth.get_user(uid).email_verified
+
+
+def create_teacher_user(email: str, name: str) -> str:
+    """Creates a teacher login with no password; they set one from the
+    setup link (password_setup_link). Raises EmailTaken if the email is
+    already registered. Returns the auth uid."""
+    _get_app()
+    try:
+        return fb_auth.create_user(email=email, display_name=name, email_verified=False).uid
+    except fb_auth.EmailAlreadyExistsError as exc:
+        raise EmailTaken(email) from exc
+
+
+class EmailTaken(Exception):
+    pass
+
+
+def password_setup_link(email: str) -> str:
+    """A one-time link to set (or reset) the account's password. The admin
+    copies it to the teacher: there is no email service of our own."""
+    _get_app()
+    return fb_auth.generate_password_reset_link(email)
+
+
+def clear_authenticator(uid: str) -> None:
+    """Removes the account's authenticator app, for a teacher who lost their
+    phone. Their next sign-in is password only, and the app then walks them
+    through setting up a new authenticator.
+
+    The Python Admin SDK has no call for this, so it goes to Identity
+    Platform's accounts:update endpoint through the SDK's own authenticated
+    client, replacing the MFA enrollments with none.
+    [VERIFY] on the live project that this clears the enrollment."""
+    from firebase_admin import _auth_client  # noqa: PLC0415 - only needed here
+
+    client = _auth_client.Client(_get_app())
+    client._user_manager._make_request("post", "/accounts:update", json={"localId": uid, "mfa": {"enrollments": []}})
 
 
 def disable_user(uid: str) -> None:

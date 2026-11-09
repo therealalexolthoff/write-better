@@ -1,6 +1,6 @@
 # Requirements (v1)
 
-> **Status:** updated in Phase 1 (2026-11-09): Write Better reviews writing only. Grammar exercises, short answers, AI-generated exercises and lessons are cut; their requirement numbers are kept, marked "Removed", because the code refers to requirements by number. Accounts and access (4.1) still describe one teacher until Phase 2. Where this and `docs/BUILD_PLAN.md` disagree, the build plan wins.
+> **Status:** updated in Phase 1 (2026-11-09): Write Better reviews writing only. Grammar exercises, short answers, AI-generated exercises and lessons are cut; their requirement numbers are kept, marked "Removed", because the code refers to requirements by number. Accounts and access (4.1) were updated in Phase 4. Where this and `docs/BUILD_PLAN.md` disagree, the build plan wins.
 
 Items marked **[VERIFY]** must be confirmed by the coding agent before relying on them.
 
@@ -23,10 +23,12 @@ In scope: grammar and punctuation errors in students' writing, including spellin
 ## 4. Functional requirements
 
 ### 4.1 Accounts and access
-- FR-1. Only the teacher creates student accounts: username (the agreed pseudonym) plus a teacher-set password. No email, no self-signup. Students cannot change their own password; only the teacher resets it.
-- FR-2. The teacher account uses email + password + TOTP MFA (any RFC 6238 authenticator app, e.g. Google Authenticator, Authy). **Confirmed:** Identity Platform requires the teacher's email be verified before TOTP enrollment (anti-lockout measure); this only affects the teacher account, since students never enroll in MFA.
-- FR-3. Students can access only their own released content. The teacher can view and manage all student data but cannot log in as a student.
-- FR-4. The teacher can deactivate a student, and delete a student with all their data (including photos). Deletion requires typing the username to confirm and explains that backups expire within 7 days.
+- FR-1. Only a teacher creates their students' accounts: username (for example `maria.k`, unique across the school) plus a teacher-set password. No email, no student self-signup. Students cannot change their own password; only their teacher resets it.
+- FR-1a. Teachers sign up on the public sign-up page (name, email, password) or are created by the admin. A sign-up has no role and reaches nothing but its own request until the admin approves it; rejecting deletes the login. Requests pending more than 30 days are deleted. Spam protection: a hidden form field, a daily limit of 20 new requests, and Identity Platform's own limits. The admin gets an email alert for each new sign-up.
+- FR-2. Teachers and the admin use email + password + TOTP MFA (any RFC 6238 authenticator app, e.g. Google Authenticator, Authy). On first sign-in the app walks them through verifying their email and adding the authenticator app; the API refuses their tokens until they sign in with a code. **Confirmed:** Identity Platform requires the email be verified before TOTP enrollment. Students never enroll in MFA.
+- FR-3. Students can access only their own released content. A teacher can view and manage only their own students' data, and cannot log in as a student. The admin manages accounts and never sees student work.
+- FR-3a. The admin can approve or reject sign-ups; create a teacher (with a one-time link to set their password); deactivate and reactivate a teacher; get a new password link; reset a lost authenticator app; and transfer all of a teacher's students and their work to another teacher. There is no email service of our own: the admin sends links themselves. All admin actions are audit-logged.
+- FR-4. A teacher can deactivate one of their students, and delete one with all their data (including photos). Deletion requires typing the username to confirm and explains that backups expire within 7 days.
 - FR-5. Overrides, reopens, deletions, and password resets are recorded in an audit log. **Extended (teacher decision):** student account creation and deactivation are audit-logged too, for the same reason - they're account-lifecycle actions in the same risk category.
 
 ### 4.2 Writing exercises (teacher)

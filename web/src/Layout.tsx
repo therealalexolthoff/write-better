@@ -23,6 +23,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           </Link>
           <nav className="site-nav" aria-label="Main">
             <Link to={PATHS.privacy}>Privacy</Link>
+            <Link to={PATHS.signUp} className="nav-wide">Teacher sign-up</Link>
             <Link to={PATHS.signIn} className="button primary small">Sign in</Link>
           </nav>
         </div>
@@ -35,6 +36,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           <nav aria-label="Footer">
             <Link to={PATHS.home}>Home</Link>
             <Link to={PATHS.privacy}>Privacy</Link>
+            <Link to={PATHS.signUp}>Teacher sign-up</Link>
             <Link to={PATHS.signIn}>Sign in</Link>
           </nav>
         </div>

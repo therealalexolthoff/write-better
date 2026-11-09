@@ -12,11 +12,13 @@ from fastapi.staticfiles import StaticFiles
 
 from shared.logs import catch_unexpected_errors
 
+from .admin import router as admin_router
 from .config import settings
 from .exercises import router as exercises_router
 from .harness_client import call_harness_health
 from .overview import router as overview_router
 from .review import router as review_router
+from .signup import router as signup_router
 from .students import router as students_router
 from .writing import router as writing_router
 
@@ -27,6 +29,8 @@ app.include_router(exercises_router)
 app.include_router(review_router)
 app.include_router(writing_router)
 app.include_router(overview_router)
+app.include_router(signup_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
@@ -57,7 +61,7 @@ def public_config() -> dict:
 # answers 404. Static files are mounted last so every API route above takes
 # precedence. In local dev the folder doesn't exist and Vite's dev server
 # is used instead.
-PAGES = ("/privacy", "/sign-in", "/app")  # "/" is served by the static mount
+PAGES = ("/privacy", "/sign-in", "/sign-up", "/app")  # "/" is served by the static mount
 _WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 if _WEB_DIST.is_dir():
 

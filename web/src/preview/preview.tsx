@@ -7,12 +7,16 @@
 // is needed. All names and writing here are made up.
 import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import Pending from "../account/Pending";
+import Setup, { AuthenticatorStep } from "../account/Setup";
+import AdminApp from "../admin/AdminApp";
 import { SignedIn } from "../App";
 import { initAuth } from "../firebase";
 import { AppHeader } from "../Layout";
 import Login from "../Login";
 import Home from "../public/Home";
 import Privacy from "../public/Privacy";
+import SignUp from "../public/SignUp";
 import DoExercise from "../student/DoExercise";
 import StudentApp from "../student/StudentApp";
 import ExerciseScreen from "../teacher/ExerciseScreen";
@@ -94,6 +98,16 @@ function studentExercise(state: string, extra: object = {}) {
 const RESULTS = { answer_text: TEXT, spans: STUDENT_SPANS, comment: EVALUATION.comment };
 
 const API: Record<string, unknown> = {
+  "GET /signup/me": { status: "pending", email_verified: false },
+  "GET /admin/signups": [
+    { uid: "u-rosa", name: "Rosa Diaz", email: "rosa.diaz@example.com", email_verified: true, created_at: "2026-11-08T15:20:00Z" },
+    { uid: "u-ben", name: "Ben Okafor", email: "ben.okafor@example.com", email_verified: false, created_at: "2026-11-09T09:05:00Z" },
+  ],
+  "GET /admin/teachers": [
+    { uid: "t-ana", name: "Ana Lee", email: "ana.lee@example.com", active: true, student_count: 14 },
+    { uid: "t-sam", name: "Sam Patel", email: "sam.patel@example.com", active: true, student_count: 9 },
+    { uid: "t-joe", name: "Joe Martin", email: "joe.martin@example.com", active: false, student_count: 0 },
+  ],
   "GET /config": { firebase: { apiKey: "preview", authDomain: "preview.example" } },
   "GET /students": STUDENTS,
   "GET /taxonomy": Object.entries(MEANINGS).map(([code, description]) => ({ code, description })),
@@ -164,7 +178,21 @@ const SCREENS: Record<string, () => ReactNode> = {
   home: () => <Home />,
   privacy: () => <Privacy />,
   "sign-in": () => <Login />,
-  "teacher-overview": () => <Teacher><SignedIn role="teacher" /></Teacher>,
+  "sign-up": () => <SignUp signedIn={false} />,
+  pending: () => <div className="app"><AppHeader role="unknown" onSignOut={noop} /><Pending email="rosa.diaz@example.com" /></div>,
+  "setup-email": () => <div className="app"><AppHeader role="teacher" onSignOut={noop} /><Setup email="rosa.diaz@example.com" emailVerified={false} /></div>,
+  "setup-authenticator": () => (
+    <div className="app">
+      <AppHeader role="teacher" onSignOut={noop} />
+      <main className="page narrow">
+        <h1>Set up your account</h1>
+        <p className="lead">Two quick steps keep your students' work safe. You only do this once.</p>
+        <ol className="progress"><li className="done">Verify your email</li><li className="current">Authenticator app</li></ol>
+        <AuthenticatorStep initial={{ key: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", url: "otpauth://totp/Write%20Better:rosa" }} />
+      </main>
+    </div>
+  ),
+  "teacher-overview": () => <Teacher><SignedIn session={{ role: "teacher", email: "ana@example.com", emailVerified: true, withCode: true }} /></Teacher>,
   "teacher-review": () => <Teacher><ExerciseScreen exerciseId="ex-draft_ready" onBack={noop} /></Teacher>,
   "teacher-revision": () => <Teacher><ExerciseScreen exerciseId="ex-revision_submitted" onBack={noop} /></Teacher>,
   "teacher-profile": () => (
@@ -186,7 +214,8 @@ const SCREENS: Record<string, () => ReactNode> = {
   "student-checked": () => (
     <div className="app"><AppHeader role="student" onSignOut={noop} /><DoExercise exerciseId="ex-revision_reviewed" onBack={noop} /></div>
   ),
-  admin: () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><SignedIn role="admin" /></div>,
+  "admin-signups": () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><AdminApp /></div>,
+  "admin-teachers": () => <div className="app"><AppHeader role="admin" onSignOut={noop} /><AdminApp initialTab="teachers" /></div>,
 };
 
 function Index() {

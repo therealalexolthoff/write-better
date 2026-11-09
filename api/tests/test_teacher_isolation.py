@@ -1,5 +1,6 @@
 """Teachers are kept separate (CLAUDE.md), the admin never reaches student
-work, and students only reach their own.
+work, students only reach their own, only the admin reaches the admin
+routes, and an account with no role reaches only its own sign-up.
 
 Walks every endpoint the app publishes (its OpenAPI listing), like
 test_every_route_needs_login.py, so a new endpoint that forgets its
@@ -39,6 +40,13 @@ NO_ID_ENDPOINTS = {
     ("GET", "/overview"),
     ("GET", "/taxonomy"),
 }
+# The sign-up routes: the only ones a role-less account reaches, and they
+# only ever touch the caller's own request (api/tests/test_signup.py).
+SIGNUP_ENDPOINTS = {("POST", "/signup"), ("GET", "/signup/me")}
+
+
+def _is_admin(path):
+    return path.startswith("/admin/") or path == "/admin"
 
 
 def _endpoints():
@@ -51,7 +59,12 @@ def _endpoints():
 
 
 def _id_endpoints():
-    return [(m, p) for m, p in _endpoints() if (m, p) not in NO_ID_ENDPOINTS]
+    """Endpoints aimed at a student's or an exercise's records."""
+    return [(m, p) for m, p in _endpoints() if "{student_id}" in p or "{exercise_id}" in p]
+
+
+def _admin_endpoints():
+    return [(m, p) for m, p in _endpoints() if _is_admin(p)]
 
 
 def _sign_in(monkeypatch, caller):
@@ -94,13 +107,19 @@ def _url(path, world):
 
 
 def test_every_endpoint_is_covered():
+    """Each endpoint is exactly one of: walked for student/exercise records,
+    walked as an admin route, a sign-up route, or checked by hand below."""
     for method, path in _endpoints():
-        has_id = "{student_id}" in path or "{exercise_id}" in path
-        assert has_id or (method, path) in NO_ID_ENDPOINTS, (
-            f"{method} {path} has no id in its path: check its ownership by hand in this file "
-            "and add it to NO_ID_ENDPOINTS"
+        kinds = [
+            "{student_id}" in path or "{exercise_id}" in path,
+            _is_admin(path),
+            (method, path) in SIGNUP_ENDPOINTS,
+            (method, path) in NO_ID_ENDPOINTS,
+        ]
+        assert sum(kinds) == 1, (
+            f"{method} {path}: check its access by hand in this file and add it to NO_ID_ENDPOINTS "
+            "(or SIGNUP_ENDPOINTS), or give it a student/exercise id or the /admin prefix"
         )
-        assert not (has_id and (method, path) in NO_ID_ENDPOINTS), f"{method} {path} is walked; remove it from NO_ID_ENDPOINTS"
 
 
 @pytest.mark.parametrize("caller", ["teacher B", "admin", "teacher B's student", "teacher A's other student"])
@@ -203,12 +222,37 @@ def test_admin_and_teacher_need_the_authenticator_code(monkeypatch, fake_db):
         assert client.get("/students", headers=AUTH).status_code == 401, role
 
 
-def test_an_account_with_no_role_reaches_nothing(monkeypatch, fake_db):
+def test_an_account_with_no_role_reaches_only_its_sign_up(monkeypatch, fake_db):
     """A teacher sign-up the admin hasn't approved yet has no role."""
     monkeypatch.setattr(
         "api.app.identity.verify_id_token",
-        lambda token: {"uid": "pending-1", "firebase": {"sign_in_second_factor": "totp"}},
+        lambda token: {"uid": "pending-1", "email": "new@example.com", "firebase": {"sign_in_provider": "password"}},
     )
     for method, path in _endpoints():
+        if (method, path) in SIGNUP_ENDPOINTS:
+            continue
         response = client.request(method, re.sub(r"{[^}]+}", "x", path), json={}, headers=AUTH)
         assert response.status_code == 401, f"{method} {path} answered {response.status_code} for a role-less account"
+
+
+# ---- admin routes ----
+
+
+@pytest.mark.parametrize("caller", ["teacher A", "teacher B", "teacher A's student"])
+def test_only_the_admin_reaches_admin_routes(monkeypatch, fake_db, world, caller):
+    fake_db.collection("teachers").document("teacher-1").set({"name": "A", "email": "a@example.com", "active": True})
+    fake_db.collection("signup_requests").document("pending-1").set({"name": "P", "email": "p@example.com", "status": "pending"})
+    if caller == "teacher A":
+        become_teacher(monkeypatch)
+    elif caller == "teacher B":
+        become_teacher(monkeypatch, uid="teacher-2")
+    else:
+        as_student(monkeypatch, student_id="s1")
+    endpoints = _admin_endpoints()
+    assert len(endpoints) >= 10  # sanity: the walk found the admin routes
+    for method, path in endpoints:
+        before = copy.deepcopy(fake_db._store)
+        url = re.sub(r"{uid}", "teacher-1" if "teachers" in path else "pending-1", path)
+        response = client.request(method, url, json={}, headers=AUTH)
+        assert response.status_code == 403, f"{caller}: {method} {path} answered {response.status_code}"
+        assert fake_db._store == before, f"{caller}: {method} {path} changed stored data"
