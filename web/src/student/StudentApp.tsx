@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { ExerciseSummary } from "../types";
 import DoExercise from "./DoExercise";
+import MyProgress from "./MyProgress";
 
 // Plain-English labels for the submission states (FR-35: no jargon).
 export function stateLabel(state: string): string {
@@ -14,7 +15,10 @@ export function stateLabel(state: string): string {
   return "Submitted – waiting for your teacher";
 }
 
-export default function StudentApp() {
+type Tab = "work" | "progress";
+
+export default function StudentApp({ initialTab = "work" }: { initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [exercises, setExercises] = useState<ExerciseSummary[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -30,7 +34,31 @@ export default function StudentApp() {
 
   return (
     <main className="page narrow">
-      <h1>My work</h1>
+      <h1>{tab === "work" ? "My work" : "My progress"}</h1>
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "work"} className={tab === "work" ? "active" : ""} onClick={() => setTab("work")}>
+          My work
+        </button>
+        <button role="tab" aria-selected={tab === "progress"} className={tab === "progress" ? "active" : ""} onClick={() => setTab("progress")}>
+          My progress
+        </button>
+      </div>
+      {tab === "progress" ? <MyProgress /> : <WorkList exercises={exercises} error={error} onOpen={setOpen} />}
+    </main>
+  );
+}
+
+function WorkList({
+  exercises,
+  error,
+  onOpen: setOpen,
+}: {
+  exercises: ExerciseSummary[] | null;
+  error: string;
+  onOpen: (id: string) => void;
+}) {
+  return (
+    <>
       {error && <p className="error">{error}</p>}
       {exercises === null && !error && <p>Loading…</p>}
       {exercises?.length === 0 && <p>Nothing here yet. Your teacher will tell you when there's new work.</p>}
@@ -44,6 +72,6 @@ export default function StudentApp() {
           </li>
         ))}
       </ul>
-    </main>
+    </>
   );
 }

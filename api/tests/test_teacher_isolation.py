@@ -39,6 +39,9 @@ NO_ID_ENDPOINTS = {
     ("GET", "/me/exercises"),
     ("GET", "/overview"),
     ("GET", "/taxonomy"),
+    ("GET", "/classes"),
+    ("POST", "/classes"),
+    ("GET", "/me/errors"),
 }
 # The sign-up routes: the only ones a role-less account reaches, and they
 # only ever touch the caller's own request (api/tests/test_signup.py).
@@ -58,9 +61,16 @@ def _endpoints():
     ]
 
 
+IDS = ("{student_id}", "{exercise_id}", "{class_id}")
+
+
+def _has_id(path):
+    return any(name in path for name in IDS)
+
+
 def _id_endpoints():
-    """Endpoints aimed at a student's or an exercise's records."""
-    return [(m, p) for m, p in _endpoints() if "{student_id}" in p or "{exercise_id}" in p]
+    """Endpoints aimed at a class's, a student's or an exercise's records."""
+    return [(m, p) for m, p in _endpoints() if _has_id(p)]
 
 
 def _admin_endpoints():
@@ -83,8 +93,9 @@ def world(monkeypatch, fake_db, harness, student, bucket):  # noqa: F811
     """Teacher A's student s1 with one exercise that has gone all the way
     to an open revision (photos, scrub, evaluation, release), and teacher
     B's own student b1. Leaves the test signed in as teacher A."""
+    fake_db.collection("classes").document("cb").set({"teacher_id": "teacher-2", "name": "B's class", "archived": False})
     fake_db.collection("students").document("b1").set(
-        {"username": "Bea", "auth_uid": "ub1", "active": True, "teacher_id": "teacher-2"}
+        {"username": "Bea", "auth_uid": "ub1", "active": True, "teacher_id": "teacher-2", "class_id": "cb"}
     )
     become_teacher(monkeypatch)
     draft = {"kind": "writing", "title": "My weekend", "prompt": "Describe your weekend."}
@@ -99,11 +110,11 @@ def world(monkeypatch, fake_db, harness, student, bucket):  # noqa: F811
     assert client.post(f"/exercises/{exercise_id}/evaluate", json={"note": ""}, headers=AUTH).status_code == 200
     client.post(f"/exercises/{exercise_id}/approve", headers=AUTH)
     assert client.post(f"/exercises/{exercise_id}/release", headers=AUTH).json()["state"] == "revision_open"
-    return {"student_id": "s1", "exercise_id": exercise_id}
+    return {"student_id": "s1", "exercise_id": exercise_id, "class_id": "c1"}
 
 
 def _url(path, world):
-    return re.sub(r"{(student_id|exercise_id)}", lambda m: world[m.group(1)], path)
+    return re.sub(r"{(student_id|exercise_id|class_id)}", lambda m: world[m.group(1)], path)
 
 
 def test_every_endpoint_is_covered():
@@ -111,14 +122,14 @@ def test_every_endpoint_is_covered():
     walked as an admin route, a sign-up route, or checked by hand below."""
     for method, path in _endpoints():
         kinds = [
-            "{student_id}" in path or "{exercise_id}" in path,
+            _has_id(path),
             _is_admin(path),
             (method, path) in SIGNUP_ENDPOINTS,
             (method, path) in NO_ID_ENDPOINTS,
         ]
         assert sum(kinds) == 1, (
             f"{method} {path}: check its access by hand in this file and add it to NO_ID_ENDPOINTS "
-            "(or SIGNUP_ENDPOINTS), or give it a student/exercise id or the /admin prefix"
+            "(or SIGNUP_ENDPOINTS), or give it a class/student/exercise id or the /admin prefix"
         )
 
 
@@ -141,6 +152,8 @@ def test_teacher_a_still_reaches_their_own(monkeypatch, fake_db, world):
     """The walk above only means something if these ids are right."""
     for path in ("/students/{student_id}", "/students/{student_id}/profile", "/exercises/{exercise_id}", "/exercises/{exercise_id}/photos"):
         assert client.get(_url(path, world), headers=AUTH).status_code == 200, path
+    for path in ("/students?class_id={class_id}", "/overview?class_id={class_id}"):
+        assert client.get(_url(path, world), headers=AUTH).status_code == 200, path
 
 
 # ---- the endpoints without an id in the path ----
@@ -158,6 +171,30 @@ def test_lists_only_show_the_teachers_own(monkeypatch, fake_db, world):
     response = client.get("/exercises?student_id=s1", headers=AUTH)
     assert response.status_code == 404 and "Alex" not in response.text
     assert client.get("/exercises?student_id=b1", headers=AUTH).json() == []
+
+
+def test_classes_and_class_filters_only_reach_the_teachers_own(monkeypatch, fake_db, world):
+    assert [c["class_id"] for c in client.get("/classes", headers=AUTH).json()] == ["c1"]
+    become_teacher(monkeypatch, uid="teacher-2")
+    assert [c["class_id"] for c in client.get("/classes", headers=AUTH).json()] == ["cb"]
+    # Teacher A's class, as a filter or a destination, is "not found" to teacher B.
+    assert client.get("/students?class_id=c1", headers=AUTH).status_code == 404
+    assert client.get("/overview?class_id=c1", headers=AUTH).status_code == 404
+    response = client.post("/students", json={"username": "Bo", "password": "longenough", "class_id": "c1"}, headers=AUTH)
+    assert response.status_code == 404
+    assert client.put("/students/b1/class", json={"class_id": "c1"}, headers=AUTH).status_code == 404
+    assert fake_db.collection("students").document("b1").get().get("class_id") == "cb"
+    created = client.post("/classes", json={"name": "Mine"}, headers=AUTH).json()
+    assert fake_db.collection("classes").document(created["class_id"]).get().get("teacher_id") == "teacher-2"
+
+
+def test_my_errors_only_shows_the_students_own(monkeypatch, fake_db, world):
+    as_student(monkeypatch, student_id="s1")
+    assert client.get("/me/errors", headers=AUTH).json()["pieces"] == 1  # the released exercise
+    for other in (("s2", "u2"), ("b1", "ub1")):
+        as_student(monkeypatch, student_id=other[0], uid=other[1])
+        view = client.get("/me/errors", headers=AUTH).json()
+        assert view["pieces"] == 0 and view["all"] == [] and "Alex" not in str(view) and TYPED not in str(view)
 
 
 def test_assigning_only_reaches_the_teachers_own_students(monkeypatch, fake_db, world):
@@ -178,7 +215,7 @@ def test_new_students_belong_to_their_creator(monkeypatch, fake_db, world):
     monkeypatch.setattr("api.app.identity.create_student_user", lambda username, password: "ub2")
     monkeypatch.setattr("api.app.identity.set_student_claims", lambda uid, student_id: None)
     become_teacher(monkeypatch, uid="teacher-2")
-    created = client.post("/students", json={"username": "Bo", "password": "longenough"}, headers=AUTH).json()
+    created = client.post("/students", json={"username": "Bo", "password": "longenough", "class_id": "cb"}, headers=AUTH).json()
     assert fake_db.collection("students").document(created["student_id"]).get().get("teacher_id") == "teacher-2"
     become_teacher(monkeypatch)
     assert created["student_id"] not in str(client.get("/students", headers=AUTH).json())
@@ -201,7 +238,7 @@ def test_admin_reaches_no_student_endpoint(monkeypatch, fake_db, world):
 
 def test_students_reach_no_teacher_list(monkeypatch, fake_db, world):
     as_student(monkeypatch, student_id="s1")
-    for method, path in NO_ID_ENDPOINTS - {("GET", "/me/exercises")}:
+    for method, path in NO_ID_ENDPOINTS - {("GET", "/me/exercises"), ("GET", "/me/errors")}:
         response = client.request(method, path, params={"student_id": "s1"}, json={}, headers=AUTH)
         assert response.status_code == 403, f"student: {method} {path} answered {response.status_code}"
     # Their own list holds only their own work.

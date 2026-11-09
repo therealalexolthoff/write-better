@@ -10,6 +10,7 @@ student.
 from fastapi import APIRouter, Depends
 from google.cloud.firestore_v1.base_query import FieldFilter
 
+from .access import check_class
 from .auth import CurrentUser, require_teacher
 from .firestore_client import get_db
 
@@ -37,7 +38,10 @@ def is_finished(submission: dict) -> bool:
 
 
 @router.get("/overview")
-def class_overview(user: CurrentUser = Depends(require_teacher)) -> list[dict]:
+def class_overview(class_id: str | None = None, user: CurrentUser = Depends(require_teacher)) -> list[dict]:
+    """Every student of the teacher, or one class's, with unfinished work."""
+    if class_id is not None:
+        check_class(class_id, user)
     db = get_db()
 
     def mine(collection: str):
@@ -47,7 +51,7 @@ def class_overview(user: CurrentUser = Depends(require_teacher)) -> list[dict]:
     rows = {
         doc.id: {"student_id": doc.id, "username": doc.get("username"), "work": []}
         for doc in mine("students")
-        if doc.get("active")
+        if doc.get("active") and (class_id is None or doc.get("class_id") == class_id)
     }
 
     for doc in mine("submissions"):

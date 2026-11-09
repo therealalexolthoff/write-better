@@ -23,6 +23,7 @@ In scope: grammar and punctuation errors in students' writing, including spellin
 ## 4. Functional requirements
 
 ### 4.1 Accounts and access
+- FR-0. Each teacher organizes their students into classes: create, rename, archive (keeps the students and their work, takes no new students) and reopen. Every student belongs to one of their teacher's classes and can be moved to another of them; their work, profile and notes go with them. The teacher's screens can show one class or all of them.
 - FR-1. Only a teacher creates their students' accounts: username (for example `maria.k`, unique across the school) plus a teacher-set password. No email, no student self-signup. Students cannot change their own password; only their teacher resets it.
 - FR-1a. Teachers sign up on the public sign-up page (name, email, password) or are created by the admin. A sign-up has no role and reaches nothing but its own request until the admin approves it; rejecting deletes the login. Requests pending more than 30 days are deleted. Spam protection: a hidden form field, a daily limit of 20 new requests, and Identity Platform's own limits. The admin gets an email alert for each new sign-up.
 - FR-2. Teachers and the admin use email + password + TOTP MFA (any RFC 6238 authenticator app, e.g. Google Authenticator, Authy). On first sign-in the app walks them through verifying their email and adding the authenticator app; the API refuses their tokens until they sign in with a code. **Confirmed:** Identity Platform requires the email be verified before TOTP enrollment. Students never enroll in MFA.
@@ -67,6 +68,7 @@ In scope: grammar and punctuation errors in students' writing, including spellin
 
 ### 4.8 Learner profile
 - FR-30. Per student, computed by plain code (never by the harness), from teacher-approved data only: counts per error code from approved annotations, plus revision outcomes per code, within a recency window (default last 5 submissions, configurable in settings).
+- FR-30a. The student sees their own errors ("My progress"): a bar chart of error types, most frequent first, across all their returned work or their most recent pieces (the profile window), with up to 3 examples of each from their own writing and how their corrections went. Built from released work only, and revision outcomes only once the teacher has sent them back: never approved-but-unreleased work, marks not yet sent, teacher notes, corrections or explanations. Plain counts ("4 times"), never scores or percentages.
 - FR-31. Teacher can view the profile and keep private free-text notes per student. Notes are never sent to the harness and never shown to the student.
 
 ### 4.9 Class overview (teacher)

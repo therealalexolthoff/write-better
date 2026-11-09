@@ -50,7 +50,18 @@ export type TeacherExercise = {
 };
 
 export type ExerciseSummary = { exercise_id: string; title: string; status?: string; state: string };
-export type Student = { student_id: string; username: string; active: boolean };
+export type Student = { student_id: string; username: string; active: boolean; class_id: string | null };
+export type ClassInfo = { class_id: string; name: string; archived: boolean; student_count: number };
+
+// The student's own error view (api/app/progress.py).
+export type ErrorExample = { title: string; text: string; start: number; end: number; cut_start: boolean; cut_end: boolean };
+export type MyErrors = {
+  pieces: number;
+  recent_pieces: number;
+  all: ProfileRow[];
+  recent: ProfileRow[];
+  examples: Record<string, ErrorExample[]>;
+};
 export type Code = { code: string; description: string };
 
 export type StudentSpan = { start: number; end: number; code: string; meaning: string };

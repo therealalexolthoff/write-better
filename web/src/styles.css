@@ -231,13 +231,16 @@ th { background: var(--bg); font-size: 0.8rem; text-transform: uppercase; letter
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: var(--brand-tint); }
 td.actions { text-align: right; }
-td.actions > button { margin: 0.2rem 0 0.2rem 0.4rem; }
+td.actions > button, td.actions > select { margin: 0.2rem 0 0.2rem 0.4rem; }
+select.small-select { min-height: 2.5rem; padding: 0.3rem 0.6rem; font-size: 0.95rem; margin-top: 0; vertical-align: middle; }
+.pickers { margin-bottom: 0.5rem; }
 table.middle td:first-child { white-space: nowrap; }
 .table-scroll { overflow-x: auto; }
 .table-scroll table { min-width: 40rem; }
 table.middle td { vertical-align: middle; }
 .add-form { border-top: 1px solid var(--line); margin-top: 1.25rem; padding-top: 1.25rem; }
 .add-form > button { margin-top: 0.75rem; }
+.add-form label select { display: block; margin-top: 0.35rem; min-height: 2.9rem; }
 ul.plain { list-style: none; padding: 0; margin: 0; }
 ul.plain li + li { margin-top: 0.4rem; }
 table.annotations { box-shadow: none; }
@@ -297,6 +300,35 @@ mark.span { background: var(--mark); border-bottom: 2px solid var(--mark-line); 
 .photos figure { margin: 0; flex: 1 1 14rem; max-width: 100%; }
 .photos img { width: 100%; border: 1px solid var(--line); border-radius: var(--radius-small); display: block; }
 .photos figcaption { font-size: 0.85rem; color: var(--muted); }
+
+/* ---- student error chart (MyProgress): one series, bar list ---- */
+
+.chart-caption { font-size: 0.9rem; color: var(--muted); margin: 0.5rem 0 0.75rem; }
+.bar-list { list-style: none; padding: 0; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.bar-list > li + li { border-top: 1px solid var(--line); }
+.bar-row {
+  width: 100%; min-height: 3.5rem; padding: 0.75rem 1rem; border: none; border-radius: 0; background: none;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "label value" "track track";
+  gap: 0.4rem 1rem; align-items: center; text-align: left; font-weight: 400;
+}
+.bar-row:hover, .bar-row.open { background: var(--brand-tint); }
+.bar-label { grid-area: label; font-weight: 600; }
+.bar-label .code { vertical-align: baseline; margin: 0 0.35rem 0 0; }
+.bar-value { grid-area: value; color: var(--charcoal); font-weight: 600; white-space: nowrap; }
+/* Bars: at most 24px thick, square at the baseline, 4px rounded at the data end. */
+.bar-track { grid-area: track; display: block; height: 12px; border-left: 2px solid var(--line-strong); }
+.bar { display: block; height: 12px; min-width: 4px; background: var(--brand); border-radius: 0 4px 4px 0; }
+@media (min-width: 40rem) {
+  .bar-row { grid-template-columns: 16rem 1fr 6rem; grid-template-areas: "label track value"; }
+  .bar-value { text-align: right; }
+}
+.bar-details { padding: 0.25rem 1rem 1rem; background: var(--brand-tint); }
+.bar-details h3 { font-size: 0.95rem; margin: 0.75rem 0 0.5rem; }
+.examples { list-style: none; padding: 0; margin: 0; }
+.examples li { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-small); padding: 0.6rem 0.9rem; }
+.examples li + li { margin-top: 0.5rem; }
+.examples .spanned { margin: 0; line-height: 2; }
+.example-source { font-size: 0.85rem; margin: 0.25rem 0 0; }
 
 /* ---- teacher review ---- */
 

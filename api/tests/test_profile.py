@@ -104,3 +104,68 @@ def test_overview_lists_unfinished_work(monkeypatch, fake_db, as_teacher, harnes
 
     as_student(monkeypatch, student_id="s1")
     assert client.get("/overview", headers=AUTH).status_code == 403
+
+
+# ---- the student's own error view (api/app/progress.py) ----
+
+
+def test_student_error_view_counts_only_returned_work(monkeypatch, fake_db, as_teacher, harness, student):  # noqa: F811
+    from .test_review import ORIGINAL
+
+    released = _released(monkeypatch, harness)  # one VT error, released to the student
+    unreleased = _submitted(monkeypatch, harness)  # evaluated and approved, but not released
+    _scrub(unreleased)
+    _evaluate(unreleased, harness)
+    client.post(f"/exercises/{unreleased}/approve", headers=AUTH)
+    client.put("/students/s1/notes", json={"teacher_notes": "Works as a nurse."}, headers=AUTH)
+
+    as_student(monkeypatch, student_id="s1")
+    view = client.get("/me/errors", headers=AUTH).json()
+    assert view["pieces"] == 1 and view["recent_pieces"] == 1
+    assert [(row["code"], row["errors"]) for row in view["all"]] == [("VT", 1)]
+    assert view["recent"] == view["all"]
+    example = view["examples"]["VT"][0]
+    assert example["title"] == "My weekend"
+    assert example["text"][example["start"] : example["end"]] == "go"  # points at the error
+    for hidden in ("nurse", "went", "Past.", ORIGINAL):  # notes, corrections, explanations, the unscrubbed text
+        assert hidden not in str(view)
+
+    # A teacher's own profile counts the approved-but-unreleased work too.
+    become_teacher(monkeypatch)
+    assert client.get("/students/s1/profile", headers=AUTH).json()["profile"]["submissions_counted"] == 2
+    assert released
+
+
+def test_revision_outcomes_show_only_once_sent(monkeypatch, fake_db, as_teacher, harness, student):  # noqa: F811
+    released = _released(monkeypatch, harness)
+    as_student(monkeypatch, student_id="s1")
+    client.post(f"/exercises/{released}/revision/submit", json={"edits": {"0": "went"}}, headers=AUTH)
+    become_teacher(monkeypatch)
+    client.put(f"/exercises/{released}/revision/outcomes", json={"outcomes": {"0": "fixed"}}, headers=AUTH)
+
+    as_student(monkeypatch, student_id="s1")
+    assert client.get("/me/errors", headers=AUTH).json()["all"][0]["fixed"] == 0  # marked, not sent yet
+    become_teacher(monkeypatch)
+    client.post(f"/exercises/{released}/revision/send", headers=AUTH)
+    as_student(monkeypatch, student_id="s1")
+    assert client.get("/me/errors", headers=AUTH).json()["all"][0]["fixed"] == 1
+
+
+def test_error_view_is_students_only(monkeypatch, fake_db, as_teacher):
+    assert client.get("/me/errors", headers=AUTH).status_code == 403
+
+
+def test_excerpt_is_the_sentence_around_the_error():
+    from api.app.progress import MAX_EXCERPT, excerpt
+
+    text = "I like Mondays. Yesterday I go to the park. It was fun."
+    piece = excerpt(text, text.index("go"), text.index("go") + 2)
+    assert piece["text"] == "Yesterday I go to the park."
+    assert piece["text"][piece["start"] : piece["end"]] == "go"
+    assert not piece["cut_start"] and not piece["cut_end"]
+
+    long = "word " * 200 + "mistake " + "word " * 200
+    at = long.index("mistake")
+    piece = excerpt(long, at, at + 7)
+    assert len(piece["text"]) <= MAX_EXCERPT and piece["cut_start"] and piece["cut_end"]
+    assert piece["text"][piece["start"] : piece["end"]] == "mistake"

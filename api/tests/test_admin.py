@@ -142,7 +142,7 @@ def test_transfer_moves_every_record(fake_db, as_admin, idp):
     _teacher(fake_db, "t1", "Leaving")
     _teacher(fake_db, "t2", "Staying")
     _teacher(fake_db, "t3", "Gone", active=False)
-    for collection in ("students", "exercises", "submissions", "jobs"):
+    for collection in ("classes", "students", "exercises", "submissions", "jobs"):
         fake_db.collection(collection).document(f"{collection}-1").set({"teacher_id": "t1"})
         fake_db.collection(collection).document(f"{collection}-other").set({"teacher_id": "t9"})
 
@@ -151,8 +151,8 @@ def test_transfer_moves_every_record(fake_db, as_admin, idp):
     assert client.post("/admin/teachers/t1/transfer", json={"to_teacher_id": "nobody"}, headers=AUTH).status_code == 404
 
     moved = client.post("/admin/teachers/t1/transfer", json={"to_teacher_id": "t2"}, headers=AUTH).json()["moved"]
-    assert moved == {"exercises": 1, "submissions": 1, "jobs": 1, "students": 1}
-    for collection in ("students", "exercises", "submissions", "jobs"):
+    assert moved == {"classes": 1, "exercises": 1, "submissions": 1, "jobs": 1, "students": 1}
+    for collection in ("classes", "students", "exercises", "submissions", "jobs"):
         assert fake_db.collection(collection).document(f"{collection}-1").get().get("teacher_id") == "t2"
         assert fake_db.collection(collection).document(f"{collection}-other").get().get("teacher_id") == "t9"
     # Running it again finds nothing left to move.

@@ -1,7 +1,7 @@
 """Which records a caller may reach (CLAUDE.md: teachers are kept separate).
 
 Every record that belongs to a teacher carries their account uid as
-"teacher_id": students, exercises, submissions and AI job records. A
+"teacher_id": classes, students, exercises, submissions and AI job records. A
 teacher only ever reaches records with their own teacher_id; a student
 only their own exercises; the admin no student records at all.
 
@@ -24,6 +24,10 @@ def _student(student_id: str) -> dict | None:
 
 def _exercise(exercise_id: str) -> dict | None:
     return get_db().collection("exercises").document(exercise_id).get().to_dict()
+
+
+def _class(class_id: str) -> dict | None:
+    return get_db().collection("classes").document(class_id).get().to_dict()
 
 
 def teacher_owns(record: dict | None, user: CurrentUser) -> bool:
@@ -63,6 +67,24 @@ def owned_exercise(exercise_id: str, user: CurrentUser = Depends(require_teacher
     """The exercise belongs to the calling teacher."""
     if not teacher_owns(_exercise(exercise_id), user):
         raise _exercise_not_found()
+
+
+def owned_class(class_id: str, user: CurrentUser = Depends(require_teacher)) -> None:
+    """The class (from the path, or the class_id query parameter) belongs
+    to the calling teacher."""
+    check_class(class_id, user)
+
+
+def check_class(class_id: str, user: CurrentUser, *, open_only: bool = False) -> dict:
+    """The teacher's own class, for routes that take a class id in the
+    body or as an optional parameter. With open_only, archived classes
+    are refused too (no new students go into one)."""
+    record = _class(class_id)
+    if not teacher_owns(record, user):
+        raise HTTPException(status_code=404, detail="class not found")
+    if open_only and record.get("archived"):
+        raise HTTPException(status_code=409, detail="That class is archived.")
+    return record
 
 
 # ---- student only ----

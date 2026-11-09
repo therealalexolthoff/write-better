@@ -10,6 +10,11 @@ from shared.schemas import WritingExerciseDraft
 class StudentCreateRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=8)
+    class_id: str  # one of the teacher's own open classes
+
+
+class MoveStudentRequest(BaseModel):
+    class_id: str
 
 
 class ResetPasswordRequest(BaseModel):
@@ -24,6 +29,7 @@ class StudentPublic(BaseModel):
     student_id: str
     username: str
     active: bool
+    class_id: str | None = None
 
 
 # ---- writing exercises ----

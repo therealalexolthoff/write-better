@@ -30,9 +30,11 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 
 SIGNUP_EXPIRY = timedelta(days=30)
 # Everything a teacher owns, by teacher_id (docs/ARCHITECTURE.md section 4).
-# Students last, so a transfer that stops partway still leaves each student
-# with the teacher who can see the rest of their work; run it again to finish.
-OWNED_COLLECTIONS = ("exercises", "submissions", "jobs", "students")
+# Classes go first, so moved students are never in a class their new
+# teacher can't see; students last, so a transfer that stops partway still
+# leaves each student with the teacher who can see the rest of their work.
+# Run it again to finish.
+OWNED_COLLECTIONS = ("classes", "exercises", "submissions", "jobs", "students")
 
 
 class NewTeacherBody(BaseModel):

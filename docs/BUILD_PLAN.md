@@ -172,6 +172,8 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 
 **Tests:** a student sees only their own data, nothing from before release, and no teacher notes.
 
+**Status (2026-11-09):** built: `api/app/classes.py`, class filters on students and the overview, moving students, admin transfers that move classes too, and the error view (`api/app/progress.py`, `web/src/student/MyProgress.tsx`). Found while building: revision outcomes the teacher has marked but not yet sent would also have leaked into the student view; it leaves them out until sent, and a test checks it.
+
 ### Phase 6: Class writing assignments
 
 - Build on `assign_writing_to_students`. Each student keeps their own copy, so the existing review flow doesn't change.

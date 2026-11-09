@@ -17,12 +17,13 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 from . import identity, photos
 from .audit import record as record_audit
-from .access import owned_student, student_for_caller
+from .access import check_class, owned_student, student_for_caller
 from .auth import CurrentUser, require_teacher
 from .firestore_client import get_db
 from .profile import student_profile
 from .models import (
     DeleteStudentRequest,
+    MoveStudentRequest,
     NotesBody,
     ResetPasswordRequest,
     StudentCreateRequest,
@@ -44,6 +45,7 @@ def _not_found() -> HTTPException:
 def create_student(
     body: StudentCreateRequest, user: CurrentUser = Depends(require_teacher)
 ) -> StudentPublic:
+    check_class(body.class_id, user, open_only=True)
     doc_ref = get_db().collection("students").document()
     uid = identity.create_student_user(body.username, body.password)
     identity.set_student_claims(uid, doc_ref.id)
@@ -52,21 +54,26 @@ def create_student(
             "username": body.username,
             "auth_uid": uid,
             "teacher_id": user.uid,
+            "class_id": body.class_id,
             "active": True,
             "teacher_notes": "",
             "created_at": datetime.now(timezone.utc),
         }
     )
     record_audit(user.uid, "create_student", target=doc_ref.id)
-    return StudentPublic(student_id=doc_ref.id, username=body.username, active=True)
+    return StudentPublic(student_id=doc_ref.id, username=body.username, active=True, class_id=body.class_id)
 
 
 @router.get("", response_model=list[StudentPublic])
-def list_students(user: CurrentUser = Depends(require_teacher)) -> list[StudentPublic]:
-    docs = get_db().collection("students").where(filter=FieldFilter("teacher_id", "==", user.uid)).stream()
+def list_students(class_id: str | None = None, user: CurrentUser = Depends(require_teacher)) -> list[StudentPublic]:
+    """The teacher's students, or just one class's."""
+    query = get_db().collection("students").where(filter=FieldFilter("teacher_id", "==", user.uid))
+    if class_id is not None:
+        check_class(class_id, user)
+        query = query.where(filter=FieldFilter("class_id", "==", class_id))
     return [
-        StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"))
-        for doc in docs
+        StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"), class_id=doc.get("class_id"))
+        for doc in query.stream()
     ]
 
 
@@ -75,7 +82,23 @@ def get_student(student_id: str) -> StudentPublic:
     doc = _student_doc(student_id).get()
     if not doc.exists:
         raise _not_found()
-    return StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"))
+    return StudentPublic(
+        student_id=doc.id, username=doc.get("username"), active=doc.get("active"), class_id=doc.get("class_id")
+    )
+
+
+@router.put("/{student_id}/class", dependencies=[Depends(owned_student)])
+def move_student(
+    student_id: str, body: MoveStudentRequest, user: CurrentUser = Depends(require_teacher)
+) -> StudentPublic:
+    """Moves a student to another of the teacher's open classes. Their work,
+    profile and notes go with them."""
+    check_class(body.class_id, user, open_only=True)
+    doc_ref = _student_doc(student_id)
+    doc_ref.update({"class_id": body.class_id})
+    record_audit(user.uid, "move_student", target=student_id)
+    doc = doc_ref.get()
+    return StudentPublic(student_id=doc.id, username=doc.get("username"), active=doc.get("active"), class_id=body.class_id)
 
 
 @router.get("/{student_id}/profile", dependencies=[Depends(owned_student)])

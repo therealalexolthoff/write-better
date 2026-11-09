@@ -17,6 +17,8 @@ def fake_db(monkeypatch):
     monkeypatch.setattr("api.app.access.get_db", lambda: db)
     monkeypatch.setattr("api.app.signup.get_db", lambda: db)
     monkeypatch.setattr("api.app.admin.get_db", lambda: db)
+    monkeypatch.setattr("api.app.classes.get_db", lambda: db)
+    monkeypatch.setattr("api.app.progress.get_db", lambda: db)
     return db
 
 

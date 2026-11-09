@@ -1,9 +1,10 @@
-// Teacher home (laptop-first): the class overview, or one student's
-// writing and profile & notes. Also assigns writing and manages student
-// accounts.
+// Teacher home (laptop-first): pick a class (or all of them), then see its
+// overview or one student's writing and profile & notes. Also assigns
+// writing and manages classes and student accounts.
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { ExerciseSummary, Student } from "../types";
+import type { ClassInfo, ExerciseSummary, Student } from "../types";
+import ClassesPanel from "./ClassesPanel";
 import ExerciseScreen, { stateLabel } from "./ExerciseScreen";
 import Overview from "./Overview";
 import ProfilePanel from "./ProfilePanel";
@@ -15,62 +16,116 @@ const TABS: { tab: Tab; label: string }[] = [
   { tab: "exercises", label: "Writing" },
   { tab: "profile", label: "Profile & notes" },
 ];
+type Panel = "" | "writing" | "students" | "classes";
 
 export default function TeacherApp() {
+  const [classes, setClasses] = useState<ClassInfo[] | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [studentId, setStudentId] = useState(""); // "" = class overview
+  const [classId, setClassId] = useState(""); // "" = all classes
+  const [studentId, setStudentId] = useState(""); // "" = the overview
   const [tab, setTab] = useState<Tab>("exercises");
   const [openExercise, setOpenExercise] = useState<string | null>(null);
-  const [showStudents, setShowStudents] = useState(false);
-  const [showWriting, setShowWriting] = useState(false);
+  const [panel, setPanel] = useState<Panel>("");
   const [message, setMessage] = useState("");
-  // Bumped after assigning writing, so the overview reloads.
+  // Bumped after assigning writing or changing students, so the overview reloads.
   const [overviewKey, setOverviewKey] = useState(0);
 
+  const loadClasses = () => api<ClassInfo[]>("/classes").then(setClasses);
   const loadStudents = () => api<Student[]>("/students").then(setStudents);
+  const reload = () => {
+    loadClasses();
+    loadStudents();
+    setOverviewKey((k) => k + 1);
+  };
   useEffect(() => {
+    loadClasses();
     loadStudents();
   }, []);
 
   if (openExercise) return <ExerciseScreen exerciseId={openExercise} onBack={() => setOpenExercise(null)} />;
+  if (classes === null) return <p className="loading">Loading…</p>;
 
-  const active = students.filter((s) => s.active);
+  const openClasses = classes.filter((c) => !c.archived);
+  const archived = classes.filter((c) => c.archived);
+  const current = classes.find((c) => c.class_id === classId);
+  const inView = students.filter((s) => !classId || s.class_id === classId);
+  const active = inView.filter((s) => s.active);
   const student = active.find((s) => s.student_id === studentId);
+  const toggle = (next: Panel) => {
+    setPanel(panel === next ? "" : next);
+    setMessage("");
+  };
+  const pickClass = (id: string) => {
+    setClassId(id);
+    setStudentId("");
+  };
+
+  if (classes.length === 0) {
+    return (
+      <main className="page narrow">
+        <h1>Welcome to Write Better</h1>
+        <p className="lead">Start by creating a class. Then add your students to it and assign them some writing.</p>
+        <ClassesPanel classes={[]} onChange={reload} firstRun />
+      </main>
+    );
+  }
+
   return (
     <main className="page wide">
       <div className="row spread">
-        <h1>{student ? student.username : "Class overview"}</h1>
+        <h1>{student ? student.username : current ? current.name : "All classes"}</h1>
         <div className="row">
-          <button className={showWriting ? "" : "primary"} onClick={() => { setShowWriting(!showWriting); setMessage(""); }}>
-            {showWriting ? "Close writing form" : "Assign writing"}
+          <button className={panel === "writing" ? "" : "primary"} onClick={() => toggle("writing")}>
+            {panel === "writing" ? "Close writing form" : "Assign writing"}
           </button>
-          <button onClick={() => setShowStudents(!showStudents)}>{showStudents ? "Hide students" : "Manage students"}</button>
+          <button onClick={() => toggle("students")}>{panel === "students" ? "Hide students" : "Manage students"}</button>
+          <button onClick={() => toggle("classes")}>{panel === "classes" ? "Hide classes" : "Manage classes"}</button>
         </div>
       </div>
-      {showStudents && <StudentsPanel students={students} onChange={loadStudents} />}
-      {showWriting && (
+
+      <div className="row pickers">
+        <label>
+          Class{" "}
+          <select value={classId} onChange={(e) => pickClass(e.target.value)}>
+            <option value="">All classes</option>
+            {openClasses.map((c) => <option key={c.class_id} value={c.class_id}>{c.name}</option>)}
+            {archived.length > 0 && (
+              <optgroup label="Archived">
+                {archived.map((c) => <option key={c.class_id} value={c.class_id}>{c.name}</option>)}
+              </optgroup>
+            )}
+          </select>
+        </label>
+        <label>
+          Show{" "}
+          <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+            <option value="">{current ? "Class overview" : "Overview"}</option>
+            {active.map((s) => (
+              <option key={s.student_id} value={s.student_id}>{s.username}</option>
+            ))}
+          </select>
+        </label>
+        {current?.archived && <span className="badge">Archived class</span>}
+      </div>
+
+      {panel === "classes" && <ClassesPanel classes={classes} onChange={reload} />}
+      {panel === "students" && (
+        <StudentsPanel students={inView} classes={classes} classId={classId} onChange={reload} />
+      )}
+      {panel === "writing" && (
         <WritingForStudents
           students={active}
           onDone={(done) => {
-            setShowWriting(false);
+            setPanel("");
             setMessage(done);
             setOverviewKey((k) => k + 1);
           }}
         />
       )}
       {message && <p className="notice">{message}</p>}
-      <label>
-        Show{" "}
-        <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-          <option value="">Class overview</option>
-          {active.map((s) => (
-            <option key={s.student_id} value={s.student_id}>{s.username}</option>
-          ))}
-        </select>
-      </label>
 
       {!student ? (
-        <Overview key={overviewKey} onOpenExercise={setOpenExercise} onOpenStudent={setStudentId} />
+        <Overview key={`${classId}-${overviewKey}`} classId={classId} onOpenExercise={setOpenExercise} onOpenStudent={setStudentId} />
       ) : (
         <>
           <div className="tabs" role="tablist">

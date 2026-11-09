@@ -24,18 +24,19 @@ def test_teacher_without_mfa_rejected(monkeypatch, fake_db):
 
 def test_create_requires_teacher(monkeypatch, fake_db):
     as_student(monkeypatch, student_id="s1")
-    response = client.post("/students", json={"username": "Alex", "password": "longenough"}, headers=AUTH)
+    response = client.post("/students", json={"username": "Alex", "password": "longenough", "class_id": "c1"}, headers=AUTH)
     assert response.status_code == 403
 
 
 def test_create_student_as_teacher(monkeypatch, fake_db, as_teacher):
     monkeypatch.setattr("api.app.identity.create_student_user", lambda username, password: "auth-uid-1")
     monkeypatch.setattr("api.app.identity.set_student_claims", lambda uid, student_id: None)
+    fake_db.collection("classes").document("c1").set({"teacher_id": "teacher-1", "name": "Mon", "archived": False})
 
-    response = client.post("/students", json={"username": "Alex", "password": "longenough"}, headers=AUTH)
+    response = client.post("/students", json={"username": "Alex", "password": "longenough", "class_id": "c1"}, headers=AUTH)
     assert response.status_code == 200
     body = response.json()
-    assert body["username"] == "Alex"
+    assert body["username"] == "Alex" and body["class_id"] == "c1"
     assert body["active"] is True
 
     entries = fake_db.collection("audit").stream()

@@ -40,10 +40,12 @@ def harness(monkeypatch):
 
 @pytest.fixture
 def student(fake_db):
-    """Two students of teacher-1, the teacher the as_teacher fixture signs in as."""
+    """Two students in class c1 of teacher-1, the teacher the as_teacher
+    fixture signs in as."""
+    fake_db.collection("classes").document("c1").set({"teacher_id": "teacher-1", "name": "Monday evening", "archived": False})
     for student_id, name in (("s1", "Alex"), ("s2", "Sam")):
         fake_db.collection("students").document(student_id).set(
-            {"username": name, "auth_uid": f"u{student_id[1:]}", "active": True, "teacher_id": "teacher-1"}
+            {"username": name, "auth_uid": f"u{student_id[1:]}", "active": True, "teacher_id": "teacher-1", "class_id": "c1"}
         )
 
 

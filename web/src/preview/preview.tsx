@@ -19,6 +19,8 @@ import Privacy from "../public/Privacy";
 import SignUp from "../public/SignUp";
 import DoExercise from "../student/DoExercise";
 import StudentApp from "../student/StudentApp";
+import MyProgress from "../student/MyProgress";
+import ClassesPanel from "../teacher/ClassesPanel";
 import ExerciseScreen from "../teacher/ExerciseScreen";
 import ProfilePanel from "../teacher/ProfilePanel";
 import StudentsPanel from "../teacher/StudentsPanel";
@@ -72,12 +74,46 @@ function revise(text: string, edits: Record<string, string>) {
 const REVISED = revise(TEXT, EDITS);
 const OUTCOMES = { "0": "fixed", "1": "changed_wrongly", "2": "fixed" } as const;
 
-const STUDENTS = [
-  { student_id: "s1", username: "maria.k", active: true },
-  { student_id: "s2", username: "tomas.r", active: true },
-  { student_id: "s3", username: "aiko.s", active: true },
-  { student_id: "s4", username: "omar.h", active: false },
+const CLASSES = [
+  { class_id: "c-tue", name: "Tuesday evening", archived: false, student_count: 3 },
+  { class_id: "c-sat", name: "Saturday advanced", archived: false, student_count: 1 },
+  { class_id: "c-old", name: "Summer intensive", archived: true, student_count: 0 },
 ];
+const STUDENTS = [
+  { student_id: "s1", username: "maria.k", active: true, class_id: "c-tue" },
+  { student_id: "s2", username: "tomas.r", active: true, class_id: "c-tue" },
+  { student_id: "s3", username: "aiko.s", active: true, class_id: "c-sat" },
+  { student_id: "s4", username: "omar.h", active: false, class_id: "c-tue" },
+];
+
+// The student's own error view: counts over all returned work and the last 5.
+function sentence(text: string, words: string) {
+  const start = text.indexOf(words);
+  return { text, start, end: start + words.length, cut_start: false, cut_end: false };
+}
+const MY_ERRORS = {
+  pieces: 8,
+  recent_pieces: 5,
+  all: [
+    { code: "VT", meaning: "Verb tense", errors: 11, fixed: 6, unfixed: 1, changed_wrongly: 2 },
+    { code: "ART", meaning: "Article/determiner", errors: 7, fixed: 4, unfixed: 0, changed_wrongly: 1 },
+    { code: "CAP", meaning: "Capitalization", errors: 4, fixed: 4, unfixed: 0, changed_wrongly: 0 },
+    { code: "VF", meaning: "Verb form", errors: 3, fixed: 1, unfixed: 1, changed_wrongly: 1 },
+    { code: "P", meaning: "Punctuation", errors: 1, fixed: 0, unfixed: 0, changed_wrongly: 0 },
+  ],
+  recent: [
+    { code: "ART", meaning: "Article/determiner", errors: 4, fixed: 2, unfixed: 0, changed_wrongly: 1 },
+    { code: "VT", meaning: "Verb tense", errors: 3, fixed: 2, unfixed: 0, changed_wrongly: 0 },
+    { code: "VF", meaning: "Verb form", errors: 2, fixed: 1, unfixed: 1, changed_wrongly: 0 },
+  ],
+  examples: {
+    VT: [
+      { title: "My weekend", ...sentence("Last weekend I go to the beach with my sister.", "go") },
+      { title: "A letter to a friend", ...sentence("Yesterday we watch a film at the cinema.", "watch") },
+    ],
+    ART: [{ title: "My hometown", ...sentence("My town has beautiful old church near the river.", "beautiful") }],
+  },
+};
 
 function teacherExercise(state: string, extra: object = {}) {
   return {
@@ -110,6 +146,8 @@ const API: Record<string, unknown> = {
   ],
   "GET /config": { firebase: { apiKey: "preview", authDomain: "preview.example" } },
   "GET /students": STUDENTS,
+  "GET /classes": CLASSES,
+  "GET /me/errors": MY_ERRORS,
   "GET /taxonomy": Object.entries(MEANINGS).map(([code, description]) => ({ code, description })),
   "GET /overview": [
     { student_id: "s1", username: "maria.k", work: [
@@ -202,7 +240,24 @@ const SCREENS: Record<string, () => ReactNode> = {
     <Teacher><main className="page wide"><WritingForStudents students={STUDENTS.filter((s) => s.active)} onDone={noop} /></main></Teacher>
   ),
   "teacher-students": () => (
-    <Teacher><main className="page wide"><StudentsPanel students={STUDENTS} onChange={noop} /></main></Teacher>
+    <Teacher><main className="page wide"><StudentsPanel students={STUDENTS} classes={CLASSES} classId="" onChange={noop} /></main></Teacher>
+  ),
+  "teacher-classes": () => <Teacher><main className="page wide"><ClassesPanel classes={CLASSES} onChange={noop} /></main></Teacher>,
+  "teacher-first-run": () => (
+    <Teacher>
+      <main className="page narrow">
+        <h1>Welcome to Write Better</h1>
+        <p className="lead">Start by creating a class. Then add your students to it and assign them some writing.</p>
+        <ClassesPanel classes={[]} onChange={noop} firstRun />
+      </main>
+    </Teacher>
+  ),
+  "student-progress": () => <div className="app"><AppHeader role="student" onSignOut={noop} /><StudentApp initialTab="progress" /></div>,
+  "student-progress-open": () => (
+    <div className="app">
+      <AppHeader role="student" onSignOut={noop} />
+      <main className="page narrow"><h1>My progress</h1><MyProgress initialOpen="VT" /></main>
+    </div>
   ),
   "student-home": () => <div className="app"><AppHeader role="student" onSignOut={noop} /><StudentApp /></div>,
   "student-writing": () => (

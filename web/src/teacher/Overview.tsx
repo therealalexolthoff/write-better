@@ -9,9 +9,11 @@ import { stateLabel } from "./ExerciseScreen";
 const TEACHER_TURN = ["transcript_review", "scrub_review", "draft_ready", "ready_to_release", "revision_submitted"];
 
 export default function Overview({
+  classId,
   onOpenExercise,
   onOpenStudent,
 }: {
+  classId: string; // "" = all the teacher's classes
   onOpenExercise: (id: string) => void;
   onOpenStudent: (id: string) => void;
 }) {
@@ -19,12 +21,20 @@ export default function Overview({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<OverviewRow[]>("/overview").then(setRows, (err) => setError(err.message));
-  }, []);
+    const query = classId ? `?class_id=${encodeURIComponent(classId)}` : "";
+    api<OverviewRow[]>(`/overview${query}`).then(setRows, (err) => setError(err.message));
+  }, [classId]);
 
   if (error) return <p className="error">{error}</p>;
   if (!rows) return <p>Loading…</p>;
-  if (rows.length === 0) return <p>No active students yet. Use “Manage students” to add them.</p>;
+  if (rows.length === 0) {
+    return (
+      <div className="empty">
+        <h2>No students here yet</h2>
+        <p className="muted">Use “Manage students” to add them.</p>
+      </div>
+    );
+  }
 
   return (
     <table className="overview">
