@@ -201,6 +201,17 @@ The current app has 165 lines of plain CSS (`web/src/styles.css`) with sensible 
 
 **Status (2026-11-09):** done except the golden set (postponed by the owner) and the pilot. Security review redone (`docs/SECURITY_REVIEW.md`): security headers added, a taken username no longer crashes, instance limits set. Deployed to write-better-app with `infra/setup_gcp.sh` (now fully scripted, Identity Platform included) and checked live: `scripts/live_test.py` (26 checks, including real AI through the Gemini fallback, a second teacher's isolation, resetting an authenticator, deleting a student) and `scripts/browser_test.mjs` (the real sign-up, setup, sign-in and email-link pages; 14 checks). Students are told on the writing screen that AI helps their teacher.
 
+### Phase 9: Installable phone app (PWA)
+
+Decided 2026-11-11: an installable web app ("Add to Home Screen") instead of app-store apps, for now. No store fees, no new dependencies, same code. A store wrapper (Capacitor) stays possible later.
+
+- `web/public/manifest.json`: name, icons, opens at `/app` full-screen.
+- `web/public/icons/`: phone icons rendered from `app-icon.svg`.
+- `web/public/sw.js`: service worker that only stores the offline page and its icon. It never caches pages, API responses, writing or photos.
+- `web/public/offline.html`: shown when a page can't load.
+
+**Status (2026-11-11):** done and checked locally in Chrome (installable, no manifest errors, offline page shown when the server is down). NOT YET TESTED LIVE: install on a real iPhone and Android phone after the next deploy. Push notifications are not included; they would need a new dependency and stored subscriptions.
+
 ## Main risks
 
 - **A missed ownership check** would expose another teacher's students. The Phase 2 tests are the protection.
